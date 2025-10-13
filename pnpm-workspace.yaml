@@ -1,0 +1,55 @@
+packages:
+  - playground
+  - docs
+  - packages/*
+  - examples/*
+
+patchedDependencies:
+  iso-ucan: patches/iso-ucan.patch
+
+catalogs:
+  dev:
+    '@antfu/eslint-config': ^5.4.1
+    '@antfu/ni': ^26.1.0
+    '@unocss/reset': ^66.5.3
+    ansis: ^4.2.0
+    bumpp: ^10.3.1
+    chokidar: ^4.0.3
+    eslint: ^9.37.0
+    exsolve: ^1.0.7
+    lightningcss: ^1.30.2
+    lint-staged: ^16.2.4
+    magic-string: ^0.30.19
+    simple-git-hooks: ^2.13.1
+    tinyglobby: 0.2.15
+    tsdown: ^0.15.6
+    tsx: 4.20.6
+    typescript: ^5.9.3
+    unocss: ^66.5.3
+    unplugin-vue: ^7.0.2
+    vite: ^7.1.9
+  prod:
+    cborg: ^4.2.15
+    iso-base: ^4.2.1
+    iso-did: ^2.1.1
+    iso-signatures: ^0.5.1
+    iso-ucan: ^0.4.1
+    pako: ^2.1.0
+    vue: ^3.5.22
+  testing:
+    vitest: ^3.2.4
+    vitest-package-exports: ^0.1.1
+    yaml: ^2.8.1
+  types:
+    '@types/node': ^24.7.2
+    '@types/pako': ^2.0.4
+  utils:
+    tinyexec: ^1.0.1
+
+ignoreWorkspaceRootCheck: true
+
+onlyBuiltDependencies:
+  - esbuild
+  - simple-git-hooks
+
+shellEmulator: true

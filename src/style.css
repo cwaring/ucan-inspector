@@ -1,0 +1,8 @@
+/* Extra Styles to be bundled into the WebComponents */
+:root, :host {
+  --un-bg-opacity: 100%;
+}
+
+.my-custom-css {
+  --uno: text-red-500;
+}
