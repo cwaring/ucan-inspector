@@ -923,7 +923,7 @@ onMounted(async () => {
     <transition name="fade">
       <aside v-if="debugMode" class="mt-6 space-y-4 rounded-3xl border border-white/10 bg-slate-950/85 p-6">
         <header>
-          <h3 class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">
             Debug mode
           </h3>
           <p class="mt-2 text-xs text-slate-400">
