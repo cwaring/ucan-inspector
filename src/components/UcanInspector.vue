@@ -581,6 +581,10 @@ function clearDebug() {
   debugEntries.value = []
 }
 
+function toggleDebugMode() {
+  debugMode.value = !debugMode.value
+}
+
 onMounted(async () => {
   if (!isBrowser)
     return
@@ -619,20 +623,10 @@ onMounted(async () => {
         Paste a UCAN token or container to decode headers, payloads, capability policies, and delegation chains. Visualize freshness windows, export structured reports, and share insight with your team.
       </p>
       <div class="mt-6 flex flex-wrap gap-3">
-        <a
-          href="https://ucan-staging.pages.dev/specification/"
-          target="_blank"
-          rel="noreferrer"
-          class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:border-white/40 hover:bg-white/10"
-        >
+        <a href="https://ucan-staging.pages.dev/specification/" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:border-white/40 hover:bg-white/10">
           Read the spec
         </a>
-        <a
-          href="https://ucan-staging.pages.dev/libraries/"
-          target="_blank"
-          rel="noreferrer"
-          class="inline-flex items-center gap-2 rounded-full border border-transparent bg-indigo-500/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400"
-        >
+        <a href="https://ucan-staging.pages.dev/libraries/" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 rounded-full border border-transparent bg-indigo-500/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400">
           Explore libraries
         </a>
       </div>
@@ -640,77 +634,44 @@ onMounted(async () => {
 
     <div class="grid gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
       <section class="rounded-3xl border border-white/10 bg-slate-950/60 p-6 backdrop-blur">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 class="text-xl font-semibold text-white">
-              Token input
-            </h2>
-            <p class="mt-1 text-sm text-slate-400">
-              Supports raw UCAN payloads and UCAN containers (headers B, C, O, P).
-            </p>
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button
-              class="rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/10"
-              type="button"
-              @click="inspectNow"
-            >
-              Inspect token
-            </button>
-            <button
-              class="rounded-full border border-transparent bg-white/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:bg-white/20"
-              type="button"
-              @click="clearInput"
-            >
-              Clear
-            </button>
-            <label class="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-slate-300">
-              <input
-                v-model="debugMode"
-                type="checkbox"
-                class="h-3.5 w-3.5 rounded border border-white/30 bg-slate-900 text-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-400/60"
-              >
-              Debug
-            </label>
-          </div>
+        <div>
+          <h2 class="text-xl font-semibold text-white">
+            Token input
+          </h2>
+          <p class="mt-1 text-sm text-slate-400">
+            Supports raw UCAN payloads and UCAN containers (headers B, C, O, P).
+          </p>
         </div>
 
-        <div class="mt-3 flex flex-wrap gap-2">
-          <button
-            class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            :disabled="mockLoadingKind === 'delegation'"
-            @click="loadMockToken('delegation')"
-          >
-            {{ mockLoadingKind === 'delegation' ? 'Loading delegation…' : 'Sample delegation' }}
-          </button>
-          <button
-            class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            :disabled="mockLoadingKind === 'invocation'"
-            @click="loadMockToken('invocation')"
-          >
-            {{ mockLoadingKind === 'invocation' ? 'Loading invocation…' : 'Sample invocation' }}
-          </button>
-          <button
-            class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-            type="button"
-            :disabled="mockLoadingKind === 'container'"
-            @click="loadMockToken('container')"
-          >
-            {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Sample container' }}
-          </button>
-        </div>
-        <p class="mt-1 text-[11px] text-slate-500">
-          Generate locally signed mock UCANs for debugging without leaving the page.
+        <textarea v-model="inputValue" class="mt-4 h-60 w-full resize-y rounded-2xl border border-white/10 bg-slate-900/80 p-4 font-mono text-sm text-slate-100 shadow-inner outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40" placeholder="Paste a UCAN token or container here…" spellcheck="false" />
+
+        <p class="mt-2 text-xs text-slate-300">
+          {{
+            parseState === 'parsing'
+              ? 'Parsing token…'
+              : parseState === 'ready'
+                ? `Decoded ${tokenCount} token${tokenCount === 1 ? '' : 's'}.`
+                : parseState === 'idle'
+                  ? 'Waiting for input.'
+                  : 'An error occurred while parsing.'
+          }}
         </p>
 
-        <textarea
-          v-model="inputValue"
-          class="mt-4 h-60 w-full resize-y rounded-2xl border border-white/10 bg-slate-900/80 p-4 font-mono text-sm text-slate-100 shadow-inner outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40"
-          placeholder="Paste a UCAN token or container here…"
-          spellcheck="false"
-        />
+        <div class="mt-4 flex flex-wrap items-center gap-2">
+          <button class="rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/10" type="button" @click="inspectNow">
+            Inspect token
+          </button>
+          <button class="rounded-full border border-transparent bg-white/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:bg-white/20" type="button" @click="clearInput">
+            Clear
+          </button>
+          <button
+            class="rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition" :class="debugMode
+              ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100 hover:border-indigo-300 hover:bg-indigo-500/30'
+              : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/30 hover:bg-white/10'" type="button" :aria-pressed="debugMode" @click="toggleDebugMode"
+          >
+            Debug: {{ debugMode ? 'On' : 'Off' }}
+          </button>
+        </div>
 
         <p v-if="parseState === 'error'" class="mt-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
           {{ parseError }}
@@ -734,18 +695,6 @@ onMounted(async () => {
             <span class="font-semibold">{{ containerInfo.tokens.length }}</span>
           </div>
         </div>
-
-        <p class="mt-4 text-xs text-slate-500">
-          {{
-            parseState === 'parsing'
-              ? 'Parsing token…'
-              : parseState === 'ready'
-                ? `Decoded ${tokenCount} token${tokenCount === 1 ? '' : 's'}.`
-                : parseState === 'idle'
-                  ? 'Waiting for input.'
-                  : 'An error occurred while parsing.'
-          }}
-        </p>
       </section>
 
       <section class="rounded-3xl border border-white/10 bg-slate-950/70 p-6 backdrop-blur">
@@ -762,14 +711,9 @@ onMounted(async () => {
           <div class="flex flex-wrap items-center gap-3">
             <div class="flex flex-wrap gap-2">
               <button
-                v-for="token in tokens"
-                :key="token.id"
-                class="rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide"
-                :class="[
+                v-for="token in tokens" :key="token.id" class="rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide" :class="[
                   token.index === selectedTokenIndex ? 'border-indigo-400 bg-indigo-500/20 text-indigo-200' : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/30 hover:text-white',
-                ]"
-                type="button"
-                @click="selectedTokenIndex = token.index"
+                ]" type="button" @click="selectedTokenIndex = token.index"
               >
                 Token {{ token.index + 1 }}
               </button>
@@ -777,16 +721,12 @@ onMounted(async () => {
 
             <div class="ml-auto flex flex-wrap gap-2">
               <span
-                v-for="chip in statusChips"
-                :key="chip.label"
-                class="rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide"
-                :class="{
+                v-for="chip in statusChips" :key="chip.label" class="rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide" :class="{
                   'bg-emerald-500/15 text-emerald-200': chip.tone === 'success',
                   'bg-amber-500/15 text-amber-200': chip.tone === 'warn',
                   'bg-rose-500/15 text-rose-200': chip.tone === 'error',
                   'bg-white/10 text-slate-200': chip.tone === 'info',
-                }"
-                :title="chip.tooltip ?? undefined"
+                }" :title="chip.tooltip ?? undefined"
               >
                 {{ chip.label }}
               </span>
@@ -795,18 +735,14 @@ onMounted(async () => {
 
           <div v-if="selectedToken && selectedToken.type !== 'unknown'" class="space-y-6">
             <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <article
-                v-for="card in summaryCards"
-                :key="card.label"
-                class="rounded-2xl border border-white/10 bg-white/5 p-4"
-              >
+              <article v-for="card in summaryCards" :key="card.label" class="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <p class="text-xs uppercase tracking-wide text-slate-400">
                   {{ card.label }}
                 </p>
                 <p class="mt-2 truncate text-sm font-semibold text-white" :title="card.value">
                   {{ card.value }}
                 </p>
-                <p class="mt-1 text-xs text-slate-500">
+                <p class="mt-1 text-xs text-slate-300">
                   {{ card.helper }}
                 </p>
               </article>
@@ -818,10 +754,7 @@ onMounted(async () => {
                 <span>Expires: <span class="font-semibold text-slate-200">{{ timeline.expLabel }}</span></span>
               </div>
               <div class="mt-3 h-2 w-full rounded-full bg-slate-800/80">
-                <div
-                  class="h-full rounded-full bg-indigo-400/80 transition-all"
-                  :style="{ width: `${timelineProgress}%` }"
-                />
+                <div class="h-full rounded-full bg-indigo-400/80 transition-all" :style="{ width: `${timelineProgress}%` }" />
               </div>
               <p v-if="timelineSummary" class="mt-2 text-sm text-slate-300">
                 Status: <span class="font-semibold text-white">{{ timelineSummary.statusLabel }}</span>
@@ -836,14 +769,7 @@ onMounted(async () => {
 
             <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
               <nav v-if="detailTabs.length" class="flex border-b border-white/5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <button
-                  v-for="tab in detailTabs"
-                  :key="tab"
-                  class="flex-1 px-3 py-2 capitalize"
-                  :class="tab === activeTab ? 'bg-white/10 text-white' : 'hover:bg-white/5'"
-                  type="button"
-                  @click="activeTab = tab"
-                >
+                <button v-for="tab in detailTabs" :key="tab" class="flex-1 px-3 py-2 capitalize" :class="tab === activeTab ? 'bg-white/10 text-white' : 'hover:bg-white/5'" type="button" @click="activeTab = tab">
                   {{ tab }}
                 </button>
               </nav>
@@ -855,8 +781,7 @@ onMounted(async () => {
                       Signature
                     </p>
                     <p
-                      class="mt-1 text-sm font-semibold"
-                      :class="{
+                      class="mt-1 text-sm font-semibold" :class="{
                         'text-emerald-200': signatureSummary.tone === 'success',
                         'text-amber-200': signatureSummary.tone === 'warn',
                         'text-rose-200': signatureSummary.tone === 'error',
@@ -865,7 +790,7 @@ onMounted(async () => {
                     >
                       {{ signatureSummary.label }}
                     </p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-slate-300">
                       {{ signatureSummary.reason ?? signatureSummary.helper }}
                     </p>
                   </div>
@@ -894,7 +819,7 @@ onMounted(async () => {
                     <p class="mt-2 text-xs text-slate-300">
                       {{ Array.isArray(selectedToken.payload.pol) ? selectedToken.payload.pol.length : 0 }} predicate{{ Array.isArray(selectedToken.payload.pol) && selectedToken.payload.pol.length === 1 ? '' : 's' }}
                     </p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-slate-300">
                       Policies constrain invocation arguments using the UCAN policy language.
                     </p>
                   </div>
@@ -905,7 +830,7 @@ onMounted(async () => {
                     <p class="mt-2 text-xs text-slate-300">
                       {{ proofsList.length }} proof{{ proofsList.length === 1 ? '' : 's' }} referenced
                     </p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-slate-300">
                       Proofs reference delegations that authorize this invocation.
                     </p>
                   </div>
@@ -916,7 +841,7 @@ onMounted(async () => {
                     <p class="mt-2 font-mono text-xs break-all text-slate-200">
                       {{ selectedToken.payload.cause }}
                     </p>
-                    <p class="mt-1 text-xs text-slate-500">
+                    <p class="mt-1 text-xs text-slate-300">
                       Receipt or task CID linked to this invocation.
                     </p>
                   </div>
@@ -928,40 +853,26 @@ onMounted(async () => {
                   </div>
                 </div>
 
-                <pre v-else-if="activeTab === 'payload'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">
-{{ selectedPayloadJson }}
-                </pre>
+                <pre v-else-if="activeTab === 'payload'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ selectedPayloadJson }}</pre>
 
-                <pre v-else-if="activeTab === 'policy' && selectedToken.type === 'delegation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">
-{{ policyJson }}
-                </pre>
+                <pre v-else-if="activeTab === 'policy' && selectedToken.type === 'delegation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ policyJson }}</pre>
 
-                <pre v-else-if="activeTab === 'args' && selectedToken.type === 'invocation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">
-{{ argsJson }}
-                </pre>
+                <pre v-else-if="activeTab === 'args' && selectedToken.type === 'invocation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ argsJson }}</pre>
 
                 <div v-else-if="activeTab === 'proofs' && selectedToken.type === 'invocation'" class="space-y-2 text-xs text-slate-200">
-                  <p v-if="proofsList.length === 0" class="text-slate-500">
+                  <p v-if="proofsList.length === 0" class="text-slate-300">
                     No proofs attached to this invocation.
                   </p>
                   <ol v-else class="space-y-2">
-                    <li
-                      v-for="(proof, proofIndex) in proofsList"
-                      :key="proof"
-                      class="rounded-lg border border-white/5 bg-slate-900/60 p-2 font-mono text-[11px]"
-                    >
+                    <li v-for="(proof, proofIndex) in proofsList" :key="proof" class="rounded-lg border border-white/5 bg-slate-900/60 p-2 font-mono text-[11px]">
                       Proof {{ proofIndex + 1 }}: {{ proof }}
                     </li>
                   </ol>
                 </div>
 
-                <pre v-else-if="activeTab === 'header'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">
-{{ selectedHeaderJson }}
-                </pre>
+                <pre v-else-if="activeTab === 'header'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ selectedHeaderJson }}</pre>
 
-                <pre v-else class="whitespace-pre-wrap break-all font-mono text-xs text-slate-100">
-{{ selectedToken.tokenBase64 }}
-                </pre>
+                <pre v-else class="whitespace-pre-wrap break-all font-mono text-xs text-slate-100">{{ selectedToken.tokenBase64 }}</pre>
               </div>
             </div>
           </div>
@@ -980,15 +891,11 @@ onMounted(async () => {
               Delegation chain
             </h3>
             <ol class="mt-3 space-y-3">
-              <li
-                v-for="link in delegationLinks"
-                :key="link.id"
-                class="rounded-xl border border-white/5 bg-slate-900/70 p-3 text-xs text-slate-300"
-              >
+              <li v-for="link in delegationLinks" :key="link.id" class="rounded-xl border border-white/5 bg-slate-900/70 p-3 text-xs text-slate-300">
                 <div class="flex flex-wrap items-center gap-2">
                   <span class="rounded-full bg-indigo-500/20 px-2 py-0.5 font-semibold text-indigo-200">#{{ link.index + 1 }}</span>
                   <span class="font-semibold text-slate-100">{{ link.iss }}</span>
-                  <span class="text-slate-500">→</span>
+                  <span class="text-slate-300">→</span>
                   <span class="font-semibold text-slate-100">{{ link.aud }}</span>
                 </div>
                 <p class="mt-1 font-mono text-[11px] text-slate-400">
@@ -996,26 +903,16 @@ onMounted(async () => {
                 </p>
               </li>
             </ol>
-            <p v-if="delegationLinks.length === 0" class="text-xs text-slate-500">
+            <p v-if="delegationLinks.length === 0" class="text-xs text-slate-300">
               No valid delegations detected.
             </p>
           </div>
 
           <div class="flex flex-wrap items-center gap-3">
-            <button
-              class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
-              type="button"
-              :disabled="!canExport"
-              @click="copyReport"
-            >
+            <button class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-300" type="button" :disabled="!canExport" @click="copyReport">
               Copy JSON report
             </button>
-            <button
-              class="rounded-full border border-indigo-400/40 bg-indigo-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-100 transition hover:border-indigo-300/80 hover:bg-indigo-400/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-500"
-              type="button"
-              :disabled="!canExport"
-              @click="downloadReport"
-            >
+            <button class="rounded-full border border-indigo-400/40 bg-indigo-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-100 transition hover:border-indigo-300/80 hover:bg-indigo-400/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-300" type="button" :disabled="!canExport" @click="downloadReport">
               Download report
             </button>
           </div>
@@ -1024,39 +921,77 @@ onMounted(async () => {
     </div>
 
     <transition name="fade">
-      <aside v-if="debugMode" class="rounded-3xl border border-white/10 bg-slate-950/80 p-5">
-        <header class="flex items-center justify-between">
-          <h3 class="text-xs font-semibold uppercase tracking-[0.3em] text-slate-400">
-            Debug log
+      <aside v-if="debugMode" class="mt-6 space-y-4 rounded-3xl border border-white/10 bg-slate-950/85 p-6">
+        <header>
+          <h3 class="text-sm font-semibold uppercase tracking-[0.3em] text-slate-300">
+            Debug mode
           </h3>
-          <button
-            class="text-[11px] uppercase tracking-wide text-slate-400 transition hover:text-slate-200"
-            type="button"
-            @click="clearDebug"
-          >
-            Clear
-          </button>
+          <p class="mt-2 text-xs text-slate-400">
+            Access mock UCANs and review structured logs while debugging.
+          </p>
         </header>
-        <ul class="mt-4 max-h-60 space-y-2 overflow-auto pr-2 text-xs">
-          <li
-            v-for="entry in [...debugEntries].reverse()"
-            :key="entry.id"
-            class="rounded-xl border border-white/5 p-3"
-            :class="entry.level === 'error' ? 'bg-rose-500/10 text-rose-200' : 'bg-white/5 text-slate-200'"
-          >
-            <div class="flex items-center justify-between">
-              <span class="font-semibold">{{ entry.stage }}</span>
-              <span class="text-[10px] uppercase tracking-wide text-slate-400">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
-            </div>
-            <p class="mt-1 whitespace-pre-wrap break-words text-[11px]">
-              {{ entry.detail }}
+
+        <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px]">
+          <section class="rounded-2xl border border-white/10 bg-slate-900/50 p-4 text-sm text-slate-200">
+            <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Sample tokens
             </p>
-          </li>
-        </ul>
+            <p class="mt-1 text-[11px] text-slate-400">
+              Quickly inject delegation, invocation, or container examples.
+            </p>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'delegation'" @click="loadMockToken('delegation')">
+                {{ mockLoadingKind === 'delegation' ? 'Loading delegation…' : 'Delegation' }}
+              </button>
+              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'invocation'" @click="loadMockToken('invocation')">
+                {{ mockLoadingKind === 'invocation' ? 'Loading invocation…' : 'Invocation' }}
+              </button>
+              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'container'" @click="loadMockToken('container')">
+                {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Container' }}
+              </button>
+            </div>
+          </section>
+
+          <section class="flex flex-col justify-between rounded-2xl border border-white/10 bg-slate-900/50 p-4 text-sm text-slate-200">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                Log status
+              </p>
+              <p class="mt-1 text-[11px] text-slate-400">
+                Entries append in real time when operations run.
+              </p>
+            </div>
+            <div class="mt-3 inline-flex items-center gap-2 rounded-full border border-indigo-400/60 bg-indigo-500/10 px-3 py-1.5 text-[11px] uppercase tracking-wide text-indigo-100">
+              <span>Status</span>
+              <span class="font-semibold">Active</span>
+            </div>
+            <button class="mt-3 self-start rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10" type="button" @click="clearDebug">
+              Clear log
+            </button>
+          </section>
+        </div>
+
+        <div class="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-300">
+            Log entries
+          </h4>
+          <ul class="mt-3 max-h-64 space-y-2 overflow-auto pr-2 text-xs">
+            <li v-for="entry in [...debugEntries].reverse()" :key="entry.id" class="rounded-xl border border-white/5 p-3" :class="entry.level === 'error' ? 'bg-rose-500/10 text-rose-200' : 'bg-white/5 text-slate-200'">
+              <div class="flex items-center justify-between">
+                <span class="font-semibold">{{ entry.stage }}</span>
+                <span class="text-[10px] uppercase tracking-wide text-slate-400">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
+              </div>
+              <p class="mt-1 whitespace-pre-wrap break-words text-[11px]">
+                {{ entry.detail }}
+              </p>
+            </li>
+            <li v-if="debugEntries.length === 0" class="rounded-xl border border-dashed border-white/10 bg-white/5 p-3 text-xs text-slate-400">
+              No entries yet. Run an inspection or load a sample token to see activity.
+            </li>
+          </ul>
+        </div>
       </aside>
     </transition>
-
-    <footer class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/5 bg-white/5 px-6 py-4 text-sm text-slate-300" />
   </div>
 </template>
 
