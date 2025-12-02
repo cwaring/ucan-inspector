@@ -1,9 +1,9 @@
 import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import c from 'ansis'
-import chokidar from 'chokidar'
 import { resolveModulePath } from 'exsolve'
 import { transform } from 'lightningcss'
 import MagicString from 'magic-string'
@@ -61,6 +61,7 @@ export async function buildCSS() {
       },
       minify: MINIFY,
     })
+    await fs.mkdir(dirname(GENERATED_CSS), { recursive: true })
     await fs.writeFile(GENERATED_CSS, `export default ${JSON.stringify(String(css))}`)
     console.log(`${c.green('✓')} CSS built`)
 
@@ -79,14 +80,7 @@ export async function buildCSS() {
   }
 }
 
-export async function watchCSS() {
-  const watcher = chokidar.watch(GLOBS, {
-    cwd: SRC_DIR,
-  })
-
-  watcher.on('change', async () => {
-    await buildCSS()
-  })
-
-  return watcher
+// Run when executed directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  buildCSS()
 }

@@ -2,17 +2,10 @@
   "name": "ucan-inspector",
   "type": "module",
   "version": "0.0.0",
-  "packageManager": "pnpm@10.18.3",
-  "description": "Custom element for inspecting UCAN tokens and containers",
+  "packageManager": "pnpm@10.24.0",
+  "description": "UCAN Inspector, a webcomponent for inspecting UCAN tokens and containers",
   "author": "@cwaring",
   "license": "MIT",
-  "funding": "https://github.com/sponsors/antfu",
-  "homepage": "https://github.com/antfu/starter-vue-webcomponent-uno#readme",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/antfu/starter-vue-webcomponent-uno.git"
-  },
-  "bugs": "https://github.com/antfu/starter-vue-webcomponent-uno/issues",
   "keywords": [],
   "sideEffects": false,
   "exports": {
@@ -27,8 +20,8 @@
   ],
   "scripts": {
     "build:css": "tsx scripts/build-css.ts",
-    "build": "tsdown --config-loader=tsx",
-    "dev": "tsdown --watch --config-loader=tsx",
+    "build": "pnpm build:css && tsdown",
+    "dev": "pnpm build:css && tsdown --watch",
     "lint": "eslint",
     "play": "nr -C playground dev",
     "prepublishOnly": "nr build",

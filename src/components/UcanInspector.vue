@@ -639,7 +639,7 @@ onMounted(async () => {
             Token input
           </h2>
           <p class="mt-1 text-sm text-slate-400">
-            Supports raw UCAN payloads and UCAN containers (headers B, C, O, P).
+            Supports raw UCAN payloads and UCAN containers.
           </p>
         </div>
 
