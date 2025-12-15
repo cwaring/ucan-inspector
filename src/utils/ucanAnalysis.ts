@@ -6,7 +6,7 @@ import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
 import { encodeBase64 } from './base64'
-import { bytesToHex, formatTimestamp, prettyJson, relativeTime } from './format'
+import { formatTimestamp, prettyJson, relativeTime } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
 export type TokenKind = 'delegation' | 'invocation' | 'unknown'
@@ -86,7 +86,7 @@ export interface DelegationSummary {
   exp: number | null
   nbf?: number
   meta?: Record<string, unknown>
-  nonceHex: string
+  nonce: string
 }
 
 export interface InvocationSummary {
@@ -101,7 +101,7 @@ export interface InvocationSummary {
   iat?: number
   meta?: Record<string, unknown>
   cause?: string
-  nonceHex: string
+  nonce: string
 }
 
 export interface DelegationView {
@@ -274,7 +274,7 @@ async function analyseDelegationToken({ bytes, base64, id, index }: { bytes: Uin
       exp: payload.exp,
       nbf: payload.nbf ?? undefined,
       meta: payload.meta,
-      nonceHex: bytesToHex(nonce),
+      nonce: encodeBase64(nonce),
     },
     timeline,
     json,
@@ -299,7 +299,6 @@ async function analyseInvocationToken({ bytes, base64, id, index }: { bytes: Uin
   const proofs = (prf ?? []).map(proof => proof.toString())
   const cause = payloadCause ? payloadCause.toString() : undefined
   const timeline = buildTimeline(payloadRest.exp ?? null, payloadRest.nbf ?? undefined)
-  const nonceHex = bytesToHex(nonce)
   const invocationCid = (await computeCid(envelope)).toString()
 
   const json: InvocationJSON = {
@@ -343,7 +342,7 @@ async function analyseInvocationToken({ bytes, base64, id, index }: { bytes: Uin
       iat: payloadRest.iat,
       meta: payloadRest.meta,
       cause,
-      nonceHex,
+      nonce: encodeBase64(nonce),
     },
     timeline,
     json,

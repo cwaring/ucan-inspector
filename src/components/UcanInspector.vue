@@ -3,10 +3,11 @@ import type { MockTokenKind } from '../utils/mockData'
 import type { AnalysisReport, SignatureStatus, TokenAnalysis } from '../utils/ucanAnalysis'
 import type { ContainerParseResult } from '../utils/ucanContainer'
 
+import { CID } from 'multiformats/cid'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import { decodeBase64 } from '../utils/base64'
-import { prettyJson } from '../utils/format'
+import { prettyJson, toDagJsonString, toPrettyDagJsonString } from '../utils/format'
 import { getMockTokens } from '../utils/mockData'
 import { analyseBytes, createReport, stringifyReport } from '../utils/ucanAnalysis'
 import { ContainerParseError, isLikelyContainer, parseContainer } from '../utils/ucanContainer'
@@ -126,11 +127,66 @@ const detailTabs = computed<DetailTab[]>(() => {
   return []
 })
 
-const selectedPayloadJson = computed(() => {
-  const token = selectedToken.value as any
+function safeCidParse(value: string): CID | string {
+  try {
+    return CID.parse(value)
+  }
+  catch {
+    return value
+  }
+}
+
+const selectedNonceDagJson = computed(() => {
+  const token = selectedToken.value
   if (!token || token.type === 'unknown')
     return ''
-  return prettyJson(token.payload)
+  return toDagJsonString(decodeBase64(token.payload.nonce))
+})
+
+const selectedCauseDagJson = computed(() => {
+  const token = selectedToken.value
+  if (!token || token.type !== 'invocation')
+    return ''
+  if (!token.payload.cause)
+    return ''
+  return toDagJsonString(safeCidParse(token.payload.cause))
+})
+
+const selectedPayloadJson = computed(() => {
+  const token = selectedToken.value
+  if (!token || token.type === 'unknown')
+    return ''
+
+  if (token.type === 'delegation') {
+    const payload = token.payload
+    return toPrettyDagJsonString({
+      iss: payload.iss,
+      aud: payload.aud,
+      sub: payload.sub ?? null,
+      cmd: payload.cmd,
+      pol: payload.pol,
+      exp: payload.exp,
+      nbf: payload.nbf,
+      nonce: decodeBase64(payload.nonce),
+      meta: payload.meta,
+    })
+  }
+
+  const payload = token.payload
+  return toPrettyDagJsonString({
+    iss: payload.iss,
+    aud: payload.aud,
+    sub: payload.sub,
+    cmd: payload.cmd,
+    args: payload.args ?? {},
+    prf: payload.proofs.map(proof => safeCidParse(proof)),
+    cause: payload.cause ? safeCidParse(payload.cause) : undefined,
+    exp: payload.exp,
+    nbf: payload.nbf,
+    iat: payload.iat,
+    meta: payload.meta,
+    nonce: decodeBase64(payload.nonce),
+  })
 })
 
 const selectedHeaderJson = computed(() => {
@@ -800,7 +856,7 @@ onMounted(async () => {
                         Nonce
                       </p>
                       <p class="mt-1 font-mono text-xs">
-                        {{ selectedToken.payload.nonceHex }}
+                        {{ selectedNonceDagJson }}
                       </p>
                     </div>
                     <div class="text-right">
@@ -839,7 +895,7 @@ onMounted(async () => {
                       Cause
                     </p>
                     <p class="mt-2 font-mono text-xs break-all text-slate-200">
-                      {{ selectedToken.payload.cause }}
+                      {{ selectedCauseDagJson }}
                     </p>
                     <p class="mt-1 text-xs text-slate-300">
                       Receipt or task CID linked to this invocation.

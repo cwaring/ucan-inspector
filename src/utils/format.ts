@@ -1,8 +1,6 @@
-import { encodeBase64 } from './base64'
+import { encode as encodeDagJson } from '@ipld/dag-json'
 
-export function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
-}
+import { encodeBase64 } from './base64'
 
 export function bytesToBase64(bytes: Uint8Array): string {
   return encodeBase64(bytes)
@@ -10,6 +8,27 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
+}
+
+const dagJsonDecoder = new TextDecoder()
+
+export function toDagJsonString(value: unknown): string {
+  try {
+    return dagJsonDecoder.decode(encodeDagJson(value as any))
+  }
+  catch {
+    return prettyJson(value)
+  }
+}
+
+export function toPrettyDagJsonString(value: unknown): string {
+  const dagJson = toDagJsonString(value)
+  try {
+    return prettyJson(JSON.parse(dagJson))
+  }
+  catch {
+    return dagJson
+  }
 }
 
 export function formatTimestamp(seconds: number | null | undefined): { label: string, date: Date | null } {
