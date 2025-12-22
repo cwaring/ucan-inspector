@@ -2,7 +2,7 @@
   "name": "ucan-inspector",
   "type": "module",
   "version": "0.0.0",
-  "packageManager": "pnpm@10.26.0",
+  "packageManager": "pnpm@10.26.1",
   "description": "UCAN Inspector, a webcomponent for inspecting UCAN tokens and containers",
   "author": "@cwaring",
   "license": "MIT",
