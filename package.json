@@ -1,5 +1,5 @@
 {
-  "name": "ucan-inspector",
+  "name": "@ucan-wg/inspector",
   "type": "module",
   "version": "0.0.0",
   "packageManager": "pnpm@10.26.2",

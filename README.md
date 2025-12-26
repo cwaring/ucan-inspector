@@ -14,13 +14,13 @@ A Vue 3 custom element for inspecting UCAN tokens (delegations and invocations) 
 ## Quick start
 
 ```bash
-pnpm add ucan-inspector # or use a relative path during local development
+pnpm add @ucan-wg/inspector
 ```
 
 Register the custom element once during application bootstrap:
 
 ```ts
-import { registerUcanInspector } from 'ucan-inspector'
+import { registerUcanInspector } from '@ucan-wg/inspector'
 
 registerUcanInspector()
 
