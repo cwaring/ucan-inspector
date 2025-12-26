@@ -1,20 +1,17 @@
-# UCAN Inspector web component
+# UCAN Inspector (web component)
 
-A self-contained Vue 3 custom element for inspecting UCAN tokens and containers directly in the browser. The component mirrors the design language of [ucan-staging.pages.dev/inspector](https://ucan-staging.pages.dev/inspector/) and is suitable for embedding inside the UCAN documentation site, browser extensions, and other host applications that need a transport-agnostic analysis tool.
+A Vue 3 custom element for inspecting UCAN tokens (delegations and invocations) and UCAN containers directly in the browser.
 
-## ✨ Features
+## Features
 
-- **UCAN-aware parsing** – understands the UCAN container header byte table, CBOR payloads, and gzip/base64 combinations.
-- **`iso-ucan` integration** – decodes delegation envelopes and surfaces issuer, audience, capability policies, and CID metadata.
-- **Invocation-aware analysis** – inspects UCAN invocation tokens alongside delegations, including proof chains, arguments, and signature validation.
-- **Timeline & validation cues** – shows `nbf`/`exp` windows, highlights expired or pending delegations, and keeps signature verification status front-and-centre.
-- **Offline signature verification** – validates delegation envelopes against `did:key` and `did:pkh` issuers with `iso-signatures`/`iso-did`, surfacing failures directly in the UI and JSON reports.
-- **URL state sync** – optional query-parameter sharing for deep links and reproducible debugging sessions.
-- **Debug & export tooling** – structured in-app logs, clipboard copy, and downloadable JSON inspection reports.
-- **Mock token generator** – load locally signed sample delegations, invocations, and containers in one click for rapid debugging.
-- **Shadow DOM styling** – UnoCSS-powered design that closely follows the UCAN design system while remaining sandbox-friendly.
+- Parses raw tokens and UCAN containers (CBOR, optional gzip, base64/base64url)
+- Decodes delegations and invocations via `iso-ucan`, including proofs, args, and CIDs
+- Verifies signatures when possible using `iso-signatures` + `iso-did` (some DID methods may require network access)
+- Shows `nbf`/`exp` status and highlights pending/expired tokens
+- Exports a structured JSON report (copy or download)
+- Optional URL state sync via the `ucan` query parameter
 
-## 🚀 Quick start
+## Quick start
 
 ```bash
 pnpm add ucan-inspector # or use a relative path during local development
@@ -31,18 +28,16 @@ registerUcanInspector()
 // <ucan-inspector></ucan-inspector>
 ```
 
-### Framework integrations
+`registerUcanInspector()` is safe to call multiple times, and the package also registers the default tag (`ucan-inspector`) on import.
 
-- **Vanilla/Docs site** – load the module, call `registerUcanInspector`, and drop `<ucan-inspector>` anywhere.
-- **Vue (SFC)** – import `UcanInspectorVueComponent` and register it locally if you prefer the SFC syntax.
-- **Browser extension** – `registerUcanInspector()` can run inside the content script before injecting the element into the page.
+This package also exports `getMockToken()` and `getMockTokens()` for generating locally signed sample tokens for debugging.
 
-## ⚙️ Component API
+## Component API
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
 | `default-token` | `string` | `""` | Optional token or container string to parse on first render. |
-| `persist-url` | `boolean` | `true` | When truthy, the inspector stores state in `?ucan=` for deep links. |
+| `persist-url` | `boolean` | `true` | When truthy, syncs the input value to the `ucan` query parameter and reads it on mount. |
 | `auto-parse` | `boolean` | `true` | Disable to require manual "Inspect token" clicks. |
 
 | Event | Payload | Description |
@@ -53,7 +48,7 @@ registerUcanInspector()
 
 All events bubble from the custom element, making them easy to observe from host pages.
 
-## 🧪 Development workflow
+## Development workflow
 
 ```bash
 pnpm install              # install dependencies
@@ -73,11 +68,11 @@ The playground mounts the custom element and is useful for verifying URL persist
 
 Both suites generate UCAN samples at runtime using `iso-ucan` and `iso-signatures` so the coverage stays realistic.
 
-## � Dependency patching
+## Dependency patching
 
-`iso-ucan` does not yet export its `utils` entrypoint, but the inspector relies on helpers such as `cid()` and `verifySignature()`. Until upstream publishes those exports we ship a pinned patch in [`patches/iso-ucan.patch`](./patches/iso-ucan.patch) that adds the missing `./utils` mapping.
+This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/utils` (see [`patches/iso-ucan.patch`](./patches/iso-ucan.patch)).
 
-When you bump `iso-ucan`, re-apply the patch by running:
+When bumping `iso-ucan`, re-apply the patch:
 
 ```bash
 pnpm patch iso-ucan
@@ -85,15 +80,15 @@ pnpm patch iso-ucan
 pnpm patch-commit "$(pwd)/node_modules/.pnpm_patches/iso-ucan@<version>"
 ```
 
-After committing the patch, run `pnpm install` so pnpm re-generates the `patches/iso-ucan.patch` file against the new version, then execute the test suite to confirm the inspector still resolves `iso-ucan/utils` correctly.
+Then run `pnpm install` and `pnpm test`.
 
-## �📁 Project structure
+## Project structure
 
 - `src/components/UcanInspector.vue` – the inspector component rendered as a custom element.
 - `src/utils/*` – shared helpers for base64, container parsing, token analysis, and formatting.
 - `scripts/build-css.ts` – UnoCSS token generation for the shadow DOM.
 - `playground/` – Vite playground for manual testing.
 
-## 📄 License
+## License
 
-[MIT](./LICENSE) © 2025 UCAN Working Group
+[MIT](./LICENSE.md) © 2025 [Chris Waring](https://github.com/cwaring)
