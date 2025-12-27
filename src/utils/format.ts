@@ -2,6 +2,9 @@ import { encode as encodeDagJson } from '@ipld/dag-json'
 
 import { encodeBase64 } from './base64'
 
+/** Output format for JSON-like inspector views. */
+export type JsonFormat = 'json' | 'dag-json'
+
 /**
  * Encode bytes into base64 (standard).
  *
@@ -40,6 +43,40 @@ export function toDagJsonString(value: unknown): string {
   catch {
     return prettyJson(value)
   }
+}
+
+/**
+ * Stringify a value for an inline, one-line display context.
+ *
+ * @remarks
+ * - `dag-json` uses DAG-JSON encoding (useful for bytes/CIDs).
+ * - `json` avoids dumping `Uint8Array` as numeric-key objects by encoding bytes as base64.
+ */
+export function stringifyInline(value: unknown, format: JsonFormat): string {
+  if (format === 'dag-json')
+    return toDagJsonString(value)
+
+  if (value instanceof Uint8Array)
+    return encodeBase64(value)
+
+  if (value == null)
+    return ''
+
+  if (typeof value === 'string')
+    return value
+
+  return String(value)
+}
+
+/**
+ * Stringify a value for a preformatted block display context.
+ *
+ * @remarks
+ * - `dag-json` uses pretty DAG-JSON.
+ * - `json` uses stable 2-space JSON.
+ */
+export function stringifyBlock(value: unknown, format: JsonFormat): string {
+  return format === 'dag-json' ? toPrettyDagJsonString(value) : prettyJson(value)
 }
 
 /**

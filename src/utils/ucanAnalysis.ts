@@ -6,7 +6,7 @@ import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
 import { encodeBase64 } from './base64'
-import { formatTimestamp, prettyJson, relativeTime } from './format'
+import { formatTimestamp, prettyJson, relativeTime, toPrettyDagJsonString } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
 /** High-level token classification used by the inspector UI. */
@@ -323,7 +323,57 @@ export function createReport(
  * @returns JSON string.
  */
 export function stringifyReport(report: AnalysisReport): string {
-  return prettyJson(report)
+  return stringifyReportWithFormat(report)
+}
+
+/** Supported report serialization formats. */
+export type ReportStringifyFormat = 'dag-json' | 'json'
+
+/** Options for {@link stringifyReportWithFormat}. */
+export interface StringifyReportOptions {
+  /** Output format. Defaults to `json`. */
+  format?: ReportStringifyFormat
+  /**
+   * Include raw byte arrays / CBOR blobs in JSON output.
+   *
+   * @remarks
+   * The report already includes shareable string forms like `tokenBase64` and CID strings.
+   * Raw bytes are redundant for most use-cases and are intentionally omitted by default.
+   */
+  includeRawBytes?: boolean
+}
+
+/**
+ * Serialize an {@link AnalysisReport} in the requested format.
+ *
+ * @param report - Report to serialize.
+ * @param options - Serialization options.
+ * @param options.format - Output format (defaults to `json`).
+ * @returns Formatted string suitable for copy/download.
+ */
+export function stringifyReportWithFormat(report: AnalysisReport, options: StringifyReportOptions = {}): string {
+  const format = options.format ?? 'json'
+  if (format === 'dag-json')
+    return toPrettyDagJsonString(report)
+
+  if (options.includeRawBytes)
+    return prettyJson(report)
+
+  return JSON.stringify(report, reportJsonReplacer, 2)
+}
+
+function reportJsonReplacer(key: string, value: unknown): unknown {
+  // Remove noisy binary fields from plain JSON exports.
+  // Token bytes are already represented as `tokenBase64`.
+  if (key === 'bytes' || key === 'payloadBytes' || key === 'tokens' || key === 'cbor')
+    return undefined
+
+  // Prevent Uint8Array values from exploding into numeric-key objects.
+  // If new binary fields are added in the future, they should be explicitly mapped.
+  if (value instanceof Uint8Array)
+    return encodeBase64(value)
+
+  return value
 }
 
 async function analyseDelegationEnvelope({

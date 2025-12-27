@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBase64 } from '../../src/utils/base64'
 import { getMockTokens } from '../../src/utils/mockData'
-import { analyseBytes } from '../../src/utils/ucanAnalysis'
+import { analyseBytes, createReport, stringifyReport, stringifyReportWithFormat } from '../../src/utils/ucanAnalysis'
 import { createSampleDelegation } from './utils'
 
 describe('ucan analysis', () => {
@@ -89,5 +89,22 @@ describe('ucan analysis', () => {
     expect(analysed.signature.reason).toBeTruthy()
     expect(analysed.issues.length).toBeGreaterThan(0)
     expect(analysed.issues.some(issue => issue.code === 'signature_invalid')).toBe(true)
+  })
+
+  it('omits raw byte arrays in default report JSON export', async () => {
+    const sample = await createSampleDelegation()
+    const analysed = await analyseBytes(sample.delegation.bytes, 0)
+
+    const report = createReport('raw', sample.delegation.toString(), undefined, [analysed], [])
+    const serialized = stringifyReport(report)
+
+    expect(serialized).not.toContain('"bytes"')
+    expect(serialized).not.toContain('"payloadBytes"')
+    expect(serialized).not.toContain('"tokens"')
+    expect(serialized).not.toContain('"cbor"')
+
+    // Still allows explicit raw-bytes export when requested.
+    const withBytes = stringifyReportWithFormat(report, { format: 'json', includeRawBytes: true })
+    expect(withBytes).toContain('"bytes"')
   })
 })

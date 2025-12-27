@@ -1,16 +1,16 @@
 import type { ComputedRef, Ref } from 'vue'
 
+import type { JsonFormat } from '../../utils/format'
 import type { AnalysisReport } from '../../utils/ucanAnalysis'
 import type { UseDebugLogReturn } from './useDebugLog'
 
 import { computed } from 'vue'
-
-import { stringifyReport } from '../../utils/ucanAnalysis'
+import { stringifyReportWithFormat } from '../../utils/ucanAnalysis'
 
 export interface UseReportExportReturn {
   /** Whether export actions should be enabled. */
   canExport: ComputedRef<boolean>
-  /** Copy the current report JSON to the clipboard (with fallback). */
+  /** Copy the current report JSON to the clipboard. */
   copyReport: () => Promise<void>
   /** Download the current report JSON as a file (browser-only). */
   downloadReport: () => void
@@ -22,6 +22,7 @@ export interface UseReportExportReturn {
  * @param options - Required inputs (report state, environment flags, and callbacks).
  * @param options.report - Current report (null when nothing parsed).
  * @param options.hasTokens - Whether there are any decoded tokens available.
+ * @param options.jsonFormat - Preferred output format for report serialization.
  * @param options.isBrowser - True when running in a browser environment.
  * @param options.pushDebug - Debug log hook used by the inspector.
  * @param options.onExport - Called after a successful export action.
@@ -36,6 +37,8 @@ export function useReportExport(options: {
   report: Readonly<Ref<AnalysisReport | null>> | ComputedRef<AnalysisReport | null>
   /** Whether there are any decoded tokens available. */
   hasTokens: Readonly<Ref<boolean>> | ComputedRef<boolean>
+  /** Preferred output format for report serialization. */
+  jsonFormat?: Readonly<Ref<JsonFormat>> | ComputedRef<JsonFormat>
   /** True when running in a browser environment. */
   isBrowser: boolean
   /** Debug log hook used by the inspector. */
@@ -50,7 +53,8 @@ export function useReportExport(options: {
     if (!currentReport || !options.isBrowser)
       return
 
-    const serialized = stringifyReport(currentReport)
+    const format = options.jsonFormat?.value ?? 'json'
+    const serialized = stringifyReportWithFormat(currentReport, { format })
 
     try {
       if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
@@ -73,7 +77,8 @@ export function useReportExport(options: {
     if (!currentReport || !options.isBrowser)
       return
 
-    const serialized = stringifyReport(currentReport)
+    const format = options.jsonFormat?.value ?? 'json'
+    const serialized = stringifyReportWithFormat(currentReport, { format })
     const blob = new Blob([serialized], { type: 'application/json' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)

@@ -1,5 +1,6 @@
 import type { ComputedRef, Ref } from 'vue'
 
+import type { JsonFormat } from '../../utils/format'
 import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '../../utils/ucanAnalysis'
 import type { SignatureStatusMeta, StatusTone } from './signatureStatusCopy'
 import type { DetailTab } from './useUcanInspection'
@@ -8,7 +9,7 @@ import { CID } from 'multiformats/cid'
 import { computed, watch } from 'vue'
 
 import { decodeBase64 } from '../../utils/base64'
-import { prettyJson, toDagJsonString, toPrettyDagJsonString } from '../../utils/format'
+import { stringifyBlock, stringifyInline } from '../../utils/format'
 
 export interface StatusChip {
   label: string
@@ -82,6 +83,7 @@ export interface UseSelectedTokenViewModelReturn {
  * @param options.selectedToken - Currently selected token (or null if nothing selected).
  * @param options.activeTab - Active detail tab (kept in sync with `detailTabs`).
  * @param options.signatureStatusCopy - Copy/tone mapping used for signature status chips/labels.
+ * @param options.jsonFormat - Preferred JSON formatting for JSON-like views.
  * @returns Derived view-model state for the inspector UI.
  *
  * @remarks
@@ -94,6 +96,8 @@ export function useSelectedTokenViewModel(options: {
   activeTab: Ref<DetailTab>
   /** Copy/tone mapping used for signature status chips/labels. */
   signatureStatusCopy: Record<SignatureStatus, SignatureStatusMeta>
+  /** Preferred JSON formatting for JSON-like views. */
+  jsonFormat?: Readonly<Ref<JsonFormat>>
 }): UseSelectedTokenViewModelReturn {
   function safeCidParse(value: string): CID | string {
     try {
@@ -124,11 +128,13 @@ export function useSelectedTokenViewModel(options: {
     return options.selectedToken.value?.issues ?? []
   })
 
+  const jsonFormat = computed<JsonFormat>(() => options.jsonFormat?.value ?? 'json')
+
   const selectedNonceDagJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown')
       return ''
-    return toDagJsonString(decodeBase64(token.payload.nonce))
+    return stringifyInline(decodeBase64(token.payload.nonce), jsonFormat.value)
   })
 
   const selectedCauseDagJson = computed(() => {
@@ -137,7 +143,10 @@ export function useSelectedTokenViewModel(options: {
       return ''
     if (!token.payload.cause)
       return ''
-    return toDagJsonString(safeCidParse(token.payload.cause))
+
+    const rawCause = token.payload.cause
+    const causeForDisplay = jsonFormat.value === 'dag-json' ? safeCidParse(rawCause) : rawCause
+    return stringifyInline(causeForDisplay, jsonFormat.value)
   })
 
   const selectedPayloadJson = computed(() => {
@@ -145,9 +154,26 @@ export function useSelectedTokenViewModel(options: {
     if (!token || token.type === 'unknown')
       return ''
 
+    const format = jsonFormat.value
+
     if (token.type === 'delegation') {
       const payload = token.payload
-      return toPrettyDagJsonString({
+
+      if (format === 'dag-json') {
+        return stringifyBlock({
+          iss: payload.iss,
+          aud: payload.aud,
+          sub: payload.sub ?? null,
+          cmd: payload.cmd,
+          pol: payload.pol,
+          exp: payload.exp,
+          nbf: payload.nbf,
+          nonce: decodeBase64(payload.nonce),
+          meta: payload.meta,
+        }, format)
+      }
+
+      return stringifyBlock({
         iss: payload.iss,
         aud: payload.aud,
         sub: payload.sub ?? null,
@@ -155,33 +181,51 @@ export function useSelectedTokenViewModel(options: {
         pol: payload.pol,
         exp: payload.exp,
         nbf: payload.nbf,
-        nonce: decodeBase64(payload.nonce),
+        nonce: payload.nonce,
         meta: payload.meta,
-      })
+      }, format)
     }
 
     const payload = token.payload
-    return toPrettyDagJsonString({
+
+    if (format === 'dag-json') {
+      return stringifyBlock({
+        iss: payload.iss,
+        aud: payload.aud,
+        sub: payload.sub,
+        cmd: payload.cmd,
+        args: payload.args ?? {},
+        prf: payload.proofs.map(proof => safeCidParse(proof)),
+        cause: payload.cause ? safeCidParse(payload.cause) : undefined,
+        exp: payload.exp,
+        nbf: payload.nbf,
+        iat: payload.iat,
+        meta: payload.meta,
+        nonce: decodeBase64(payload.nonce),
+      }, format)
+    }
+
+    return stringifyBlock({
       iss: payload.iss,
       aud: payload.aud,
       sub: payload.sub,
       cmd: payload.cmd,
       args: payload.args ?? {},
-      prf: payload.proofs.map(proof => safeCidParse(proof)),
-      cause: payload.cause ? safeCidParse(payload.cause) : undefined,
+      prf: payload.proofs,
+      cause: payload.cause,
       exp: payload.exp,
       nbf: payload.nbf,
       iat: payload.iat,
       meta: payload.meta,
-      nonce: decodeBase64(payload.nonce),
-    })
+      nonce: payload.nonce,
+    }, format)
   })
 
   const selectedHeaderJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown')
       return ''
-    return prettyJson(token.header)
+    return stringifyBlock(token.header, jsonFormat.value)
   })
 
   const selectedTokenCid = computed(() => {
@@ -411,21 +455,21 @@ export function useSelectedTokenViewModel(options: {
     const token = options.selectedToken.value
     if (!token || token.type !== 'delegation')
       return '[]'
-    return prettyJson(token.payload.pol ?? [])
+    return stringifyBlock(token.payload.pol ?? [], jsonFormat.value)
   })
 
   const metaJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown' || !token.payload.meta)
       return null
-    return prettyJson(token.payload.meta)
+    return stringifyBlock(token.payload.meta, jsonFormat.value)
   })
 
   const argsJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type !== 'invocation')
       return '{}'
-    return prettyJson(token.payload.args ?? {})
+    return stringifyBlock(token.payload.args ?? {}, jsonFormat.value)
   })
 
   const proofsList = computed(() => {

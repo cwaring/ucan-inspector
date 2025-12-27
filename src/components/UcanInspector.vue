@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { JsonFormat } from '../utils/format'
 import type { MockTokenKind } from '../utils/mockData'
 import type { AnalysisReport, Issue } from '../utils/ucanAnalysis'
 import type { DelegationLink } from './inspector/types'
@@ -48,6 +49,8 @@ const inputValue = ref(props.ucan)
 const debugMode = ref(false)
 const { reversedDebugEntries, pushDebug, clearDebug } = useDebugLog(50)
 const mockLoadingKind = ref<MockTokenKind | null>(null)
+
+const jsonFormat = ref<JsonFormat>('json')
 
 const {
   tokens,
@@ -125,6 +128,7 @@ const {
   selectedToken,
   activeTab,
   signatureStatusCopy,
+  jsonFormat,
 })
 
 const delegationLinks = computed<DelegationLink[]>(() => {
@@ -146,6 +150,7 @@ const delegationLinks = computed<DelegationLink[]>(() => {
 const { canExport, copyReport, downloadReport } = useReportExport({
   report,
   hasTokens,
+  jsonFormat,
   isBrowser: urlSync.isBrowser,
   pushDebug,
   onExport: payload => emit('reportExport', payload),
