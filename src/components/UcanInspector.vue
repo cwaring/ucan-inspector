@@ -319,6 +319,25 @@ const statusChips = computed((): StatusChip[] => {
     return [{ label: 'Unknown token format', tone: 'warn' }] as StatusChip[]
 
   const chips: StatusChip[] = []
+
+  const typeTag = typeof token.header?.spec === 'string' ? token.header.spec : ''
+  if (typeTag) {
+    chips.push({
+      label: `Type: ${typeTag}`,
+      tone: 'info',
+      tooltip: 'Token type tag from the decoded UCAN envelope header.',
+    })
+  }
+
+  const specVersion = typeof token.header?.version === 'string' ? token.header.version : ''
+  if (specVersion) {
+    chips.push({
+      label: `Spec: v${specVersion}`,
+      tone: 'info',
+      tooltip: 'UCAN spec version from the decoded envelope header.',
+    })
+  }
+
   switch (token.timeline.state) {
     case 'expired':
       chips.push({ label: `Expired ${token.timeline.expRelative}`, tone: 'error' })
