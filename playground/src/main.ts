@@ -1,5 +1,5 @@
-import { registerUcanInspector } from '../../src'
+import { defineUcanInspector } from '../../src'
 
 import './override-style.css'
 
-registerUcanInspector()
+defineUcanInspector()

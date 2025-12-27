@@ -29,15 +29,15 @@ pnpm add @ucan-wg/inspector
 Register the custom element once during application bootstrap:
 
 ```ts
-import { registerUcanInspector } from '@ucan-wg/inspector'
+import { defineUcanInspector } from '@ucan-wg/inspector'
 
-registerUcanInspector()
+defineUcanInspector()
 
 // later in your DOM
 // <ucan-inspector></ucan-inspector>
 ```
 
-`registerUcanInspector()` is safe to call multiple times, and the package also registers the default tag (`ucan-inspector`) on import.
+`defineUcanInspector()` is safe to call multiple times.
 
 This package also exports `getMockToken()` and `getMockTokens()` for generating locally signed sample tokens for debugging.
 
@@ -60,21 +60,21 @@ The exported helpers include intentionally malformed samples so you can verify w
 
 | Prop | Type | Default | Description |
 | --- | --- | --- | --- |
-| `default-token` | `string` | `""` | Optional token or container string to parse on first render. |
-| `persist-url` | `boolean` | `true` | When truthy, syncs the input value to the `ucan` query parameter and reads it on mount. |
-| `auto-parse` | `boolean` | `true` | Disable to require manual "Inspect token" clicks. |
+| `ucan` | `string` | `""` | Optional token or container string to parse on first render (and when updated). |
+| `sync-url` | `boolean` | `true` | When truthy, syncs the input value to the `ucan` query parameter and reads it on mount. |
+| `auto-inspect` | `boolean` | `true` | Disable to require manual "Inspect token" clicks. |
 
 | Event | Payload | Description |
 | --- | --- | --- |
-| `analysis` | `AnalysisReport` | Fired after a successful parse with the full report object. |
-| `error` | `string \| null` | Raised whenever parsing fails (or resets back to `null`). |
-| `export` | `{ kind: 'copy' \| 'download'; report: AnalysisReport }` | Emitted after the user copies or downloads the report. |
+| `report` | `AnalysisReport` | Fired after a successful parse with the full report object. |
+| `reportError` | `string \| null` | Raised whenever parsing fails (or resets back to `null`). |
+| `reportExport` | `{ action: 'copy' \| 'download'; report: AnalysisReport }` | Emitted after the user copies or downloads the report. |
 
 All events bubble from the custom element, making them easy to observe from host pages.
 
 ### Report diagnostics
 
-The `analysis` payload includes `issues` at the report and token levels:
+The `report` payload includes `issues` at the report and token levels:
 
 - `report.issues[]`
 - `report.tokens[].issues[]`

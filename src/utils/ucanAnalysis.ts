@@ -190,10 +190,26 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
   }
 
   const { envelope } = envelopeResult
-  if (envelope.spec === 'dlg')
-    return await analyseDelegationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
-  if (envelope.spec === 'inv')
-    return await analyseInvocationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
+  if (envelope.spec === 'dlg') {
+    return await analyseDelegationEnvelope({
+      envelope: envelope as DecodedEnvelope<'dlg'>,
+      bytes,
+      base64,
+      id,
+      index,
+      initialIssues: envelopeResult.issues,
+    })
+  }
+  if (envelope.spec === 'inv') {
+    return await analyseInvocationEnvelope({
+      envelope: envelope as DecodedEnvelope<'inv'>,
+      bytes,
+      base64,
+      id,
+      index,
+      initialIssues: envelopeResult.issues,
+    })
+  }
 
   const reason = `Unsupported payload spec: ${envelope.spec}`
   return {
@@ -404,10 +420,10 @@ async function analyseInvocationEnvelope({
 }
 
 function decodeEnvelopeSafe(bytes: Uint8Array):
-  | { ok: true, envelope: DecodedEnvelope<any>, issues: Issue[] }
+  | { ok: true, envelope: DecodedEnvelope<'dlg' | 'inv'>, issues: Issue[] }
   | { ok: false, issues: Issue[] } {
   try {
-    const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<any>
+    const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<'dlg' | 'inv'>
     const issues: Issue[] = []
 
     if (!envelope.version || !envelope.spec) {

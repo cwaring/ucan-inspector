@@ -10,11 +10,9 @@ export const UcanInspectorElement = defineCustomElement(Component, {
 
 const DEFAULT_TAG = 'ucan-inspector'
 
-export function registerUcanInspector(tag = DEFAULT_TAG): void {
+export function defineUcanInspector(tag = DEFAULT_TAG): void {
   if (typeof window === 'undefined')
     return
   if (!customElements.get(tag))
     customElements.define(tag, UcanInspectorElement)
 }
-
-registerUcanInspector()

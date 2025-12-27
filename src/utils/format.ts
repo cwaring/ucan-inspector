@@ -14,7 +14,7 @@ const dagJsonDecoder = new TextDecoder()
 
 export function toDagJsonString(value: unknown): string {
   try {
-    return dagJsonDecoder.decode(encodeDagJson(value as any))
+    return dagJsonDecoder.decode(encodeDagJson(value as unknown))
   }
   catch {
     return prettyJson(value)
