@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { TokenAnalysis } from '../../utils/ucanAnalysis'
+import type { TokenTimeline } from '../../utils/ucanAnalysis'
 
 defineProps<{
   summaryCards: Array<{ label: string, value: string, helper: string }>
-  timeline: TokenAnalysis['timeline'] | null
+  timeline: TokenTimeline | null
   timelineProgress: number
   timelineSummary: null | { statusLabel: string, expText: string | null, nbfText: string | null }
 }>()
