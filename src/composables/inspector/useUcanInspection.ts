@@ -9,12 +9,16 @@ import { decodeBase64 } from '../../utils/base64'
 import { analyseBytes, createReport } from '../../utils/ucanAnalysis'
 import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '../../utils/ucanContainer'
 
+/** Current state of the parsing/analysis pipeline. */
 export type ParseState = 'idle' | 'parsing' | 'ready' | 'error'
 
+/** Detail tabs shown in the token inspector UI. */
 export type DetailTab = 'summary' | 'payload' | 'header' | 'raw' | 'policy' | 'args' | 'proofs'
 
+/** Log levels accepted by the inspector debug panel. */
 export type DebugLogLevel = 'info' | 'error'
 
+/** Copy used when presenting signature verification outcomes. */
 export interface SignatureStatusCopy {
   label: string
   helper: string

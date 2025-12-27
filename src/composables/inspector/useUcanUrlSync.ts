@@ -1,3 +1,9 @@
+/**
+ * Tiny helper for keeping the inspector input synchronized with a URL query parameter.
+ *
+ * @param paramName - Query parameter to read/write.
+ * @returns URL sync helpers.
+ */
 export function useUcanUrlSync(paramName = 'ucan'): {
   /** Whether we're running in a browser environment. */
   isBrowser: boolean

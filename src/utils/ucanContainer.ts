@@ -5,22 +5,43 @@ import { ungzip } from 'pako'
 
 import { decodeBase64, encodeBase64 } from './base64'
 
+/** Supported payload encodings for UCAN container bytes. */
 export type ContainerEncoding = 'raw' | 'base64' | 'base64url'
+/** Supported compression modes for UCAN container bytes. */
 export type ContainerCompression = 'none' | 'gzip'
+/** Severity levels for container diagnostics. */
 export type ContainerDiagnosticLevel = 'notice' | 'warn'
 
+/**
+ * A non-fatal diagnostic produced while parsing a container.
+ *
+ * @remarks
+ * Diagnostics are intended for UI surfacing and debugging, not for flow control.
+ */
 export interface ContainerDiagnostic {
   level: ContainerDiagnosticLevel
   code: string
   message: string
 }
 
+/**
+ * Parsed container header details.
+ *
+ * @remarks
+ * `raw` is the first byte/character (ASCII) that encodes encoding + compression.
+ */
 export interface ContainerHeader {
   raw: number
   encoding: ContainerEncoding
   compression: ContainerCompression
 }
 
+/**
+ * Result of parsing a UCAN container.
+ *
+ * @remarks
+ * `tokens` is the extracted list of token byte arrays (each representing one UCAN).
+ */
 export interface ContainerParseResult {
   header: ContainerHeader
   payloadBytes: Uint8Array
@@ -29,6 +50,12 @@ export interface ContainerParseResult {
   diagnostics: ContainerDiagnostic[]
 }
 
+/**
+ * Error thrown when a UCAN container cannot be parsed.
+ *
+ * @remarks
+ * Includes a parsing stage and a stable error code for UI/diagnostics.
+ */
 export class ContainerParseError extends Error {
   constructor(
     message: string,
@@ -56,12 +83,25 @@ const textHeaderTable: Record<number, { encoding: Exclude<ContainerEncoding, 'ra
   0x50: { encoding: 'base64url', compression: 'gzip', variant: 'url' }, // P
 }
 
+/**
+ * Heuristic check for whether a string begins with a known container header.
+ *
+ * @param input - Raw user input.
+ * @returns True when the first character matches a supported container header.
+ */
 export function looksLikeContainerHeader(input: string): boolean {
   if (!input)
     return false
   return input.charCodeAt(0) in headerTable
 }
 
+/**
+ * Parse a UCAN container provided as text.
+ *
+ * @param input - Input string beginning with a container header character.
+ * @returns Parsed container details and extracted token byte arrays.
+ * @throws {@link ContainerParseError} When parsing fails.
+ */
 export function parseUcanContainerText(input: string): ContainerParseResult {
   const value = input.trim()
   if (!value)
@@ -97,6 +137,13 @@ export function parseUcanContainerText(input: string): ContainerParseResult {
   })
 }
 
+/**
+ * Parse a UCAN container provided as bytes.
+ *
+ * @param input - Raw container bytes.
+ * @returns Parsed container details and extracted token byte arrays.
+ * @throws {@link ContainerParseError} When parsing fails.
+ */
 export function parseUcanContainerBytes(input: Uint8Array): ContainerParseResult {
   if (!input.length)
     throw new ContainerParseError('Input is empty', 'header', 'empty_input')

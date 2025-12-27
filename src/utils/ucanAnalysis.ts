@@ -9,10 +9,18 @@ import { encodeBase64 } from './base64'
 import { formatTimestamp, prettyJson, relativeTime } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
+/** High-level token classification used by the inspector UI. */
 export type TokenKind = 'delegation' | 'invocation' | 'unknown'
 
+/** Severity level for analysis issues. */
 export type IssueLevel = 'notice' | 'warn' | 'error'
 
+/**
+ * An issue discovered during decoding / analysis.
+ *
+ * @remarks
+ * Issues are intended for UI presentation and diagnostics.
+ */
 export interface Issue {
   level: IssueLevel
   code: string
@@ -31,6 +39,7 @@ interface DelegationPayload {
   meta?: Record<string, unknown>
 }
 
+/** JSON view of a delegation token suitable for export. */
 export interface DelegationJSON {
   token: string
   cid: string
@@ -54,6 +63,7 @@ export interface DelegationJSON {
   }
 }
 
+/** JSON view of an invocation token suitable for export. */
 export interface InvocationJSON {
   cid: string
   envelope: {
@@ -70,13 +80,26 @@ export interface InvocationJSON {
   }
 }
 
+/**
+ * Signature verification status.
+ *
+ * @remarks
+ * Includes `skipped` for cases where verification isn't attempted.
+ */
 export type SignatureStatus = SignatureVerificationResult['status'] | 'skipped'
 
+/** Signature verification insight attached to a token analysis. */
 export interface SignatureInsight {
   status: SignatureStatus
   reason?: string
 }
 
+/**
+ * Token freshness timeline derived from exp/nbf.
+ *
+ * @remarks
+ * Used for overview UI and status chips.
+ */
 export interface TokenTimeline {
   expLabel: string
   expRelative: string
@@ -85,6 +108,7 @@ export interface TokenTimeline {
   state: 'valid' | 'expired' | 'pending' | 'none'
 }
 
+/** Minimal, UI-friendly view of a delegation payload. */
 export interface DelegationSummary {
   iss: string
   aud: string
@@ -97,6 +121,7 @@ export interface DelegationSummary {
   nonce: string
 }
 
+/** Minimal, UI-friendly view of an invocation payload. */
 export interface InvocationSummary {
   iss: string
   aud?: string
@@ -112,6 +137,12 @@ export interface InvocationSummary {
   nonce: string
 }
 
+/**
+ * Fully decoded delegation token view.
+ *
+ * @remarks
+ * Includes both a presentation-friendly payload and an export-friendly `json` shape.
+ */
 export interface DelegationView {
   type: 'delegation'
   tokenBase64: string
@@ -127,6 +158,12 @@ export interface DelegationView {
   json: DelegationJSON
 }
 
+/**
+ * Fully decoded invocation token view.
+ *
+ * @remarks
+ * Includes both a presentation-friendly payload and an export-friendly `json` shape.
+ */
 export interface InvocationView {
   type: 'invocation'
   tokenBase64: string
@@ -142,6 +179,9 @@ export interface InvocationView {
   json: InvocationJSON
 }
 
+/**
+ * Fallback view for inputs that cannot be decoded as a supported UCAN envelope.
+ */
 export interface UnknownTokenView {
   type: 'unknown'
   reason: string
@@ -156,8 +196,20 @@ interface TokenAnalysisMeta {
   signature: SignatureInsight
 }
 
+/**
+ * Union of all token analysis variants returned by {@link analyseBytes}.
+ *
+ * @remarks
+ * Every variant includes shared metadata like `id`, `index`, `bytes`, `issues`, and `signature`.
+ */
 export type TokenAnalysis = (DelegationView | InvocationView | UnknownTokenView) & TokenAnalysisMeta
 
+/**
+ * Full analysis output for an inspection run.
+ *
+ * @remarks
+ * This is the primary payload emitted by the inspector and exported as JSON.
+ */
 export interface AnalysisReport {
   source: 'container' | 'raw'
   rawInput: string
@@ -167,6 +219,13 @@ export interface AnalysisReport {
   createdAt: string
 }
 
+/**
+ * Analyse a single UCAN token represented as bytes.
+ *
+ * @param bytes - Token bytes.
+ * @param index - Token index within the input.
+ * @returns Token analysis view.
+ */
 export async function analyseBytes(bytes: Uint8Array, index: number): Promise<TokenAnalysis> {
   const base64 = encodeBase64(bytes)
   const id = `token-${index}`
@@ -230,6 +289,16 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
   }
 }
 
+/**
+ * Create an {@link AnalysisReport} for a set of analyzed tokens.
+ *
+ * @param source - Whether input was parsed as a container or a single raw token.
+ * @param rawInput - Raw user input.
+ * @param container - Container details when `source === 'container'`.
+ * @param tokens - Analysed tokens.
+ * @param issues - Report-level issues.
+ * @returns New report.
+ */
 export function createReport(
   source: 'container' | 'raw',
   rawInput: string,
@@ -247,6 +316,12 @@ export function createReport(
   }
 }
 
+/**
+ * Serialize an {@link AnalysisReport} as formatted JSON.
+ *
+ * @param report - Report to serialize.
+ * @returns JSON string.
+ */
 export function stringifyReport(report: AnalysisReport): string {
   return prettyJson(report)
 }

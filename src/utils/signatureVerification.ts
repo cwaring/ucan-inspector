@@ -8,8 +8,10 @@ import { verifier as rsaVerifier } from 'iso-signatures/verifiers/rsa.js'
 import { Delegation } from 'iso-ucan/delegation'
 import { verifySignature } from 'iso-ucan/utils'
 
+/** High-level signature verification outcomes. */
 export type SignatureStatus = 'verified' | 'failed' | 'unsupported'
 
+/** Result of attempting to verify a UCAN signature. */
 export interface SignatureVerificationResult {
   status: SignatureStatus
   reason?: string
@@ -31,6 +33,12 @@ function isUnsupportedReason(message: string): boolean {
   return /unsupported/i.test(message) || /No verification method/i.test(message) || /No DID Document/i.test(message) || /fetch is not defined/i.test(message)
 }
 
+/**
+ * Verify a delegation signature from raw token bytes.
+ *
+ * @param bytes - Delegation token bytes.
+ * @returns Verification result.
+ */
 export async function verifyDelegationSignature(bytes: Uint8Array): Promise<SignatureVerificationResult> {
   try {
     await Delegation.from({
@@ -50,6 +58,12 @@ export async function verifyDelegationSignature(bytes: Uint8Array): Promise<Sign
   }
 }
 
+/**
+ * Verify an invocation signature from a decoded UCAN envelope.
+ *
+ * @param envelope - Decoded invocation envelope.
+ * @returns Verification result.
+ */
 export async function verifyInvocationSignature(envelope: DecodedEnvelope<'inv'>): Promise<SignatureVerificationResult> {
   try {
     if (envelope.spec !== 'inv')

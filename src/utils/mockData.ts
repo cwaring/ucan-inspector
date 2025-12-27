@@ -44,6 +44,7 @@ export interface MockTokens {
   tamperedDelegation: string
 }
 
+/** Union of supported mock token keys. */
 export type MockTokenKind = keyof MockTokens
 
 interface MockTokenCacheEntry {
@@ -152,10 +153,27 @@ async function ensureMockTokens(): Promise<MockTokens> {
   return cachedTokens.promise
 }
 
+/**
+ * Retrieve the full set of mock tokens.
+ *
+ * @returns Mock tokens keyed by {@link MockTokenKind}.
+ *
+ * @remarks
+ * Tokens are cached and periodically refreshed.
+ */
 export async function getMockTokens(): Promise<MockTokens> {
   return ensureMockTokens()
 }
 
+/**
+ * Retrieve one mock token by kind.
+ *
+ * @param kind - Which mock token to return.
+ * @returns The requested mock token.
+ *
+ * @remarks
+ * Used for demos, playgrounds, and manual UI testing.
+ */
 export async function getMockToken<T extends MockTokenKind>(kind: T): Promise<MockTokens[T]> {
   const tokens = await ensureMockTokens()
   return tokens[kind]

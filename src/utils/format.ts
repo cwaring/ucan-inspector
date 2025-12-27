@@ -2,16 +2,37 @@ import { encode as encodeDagJson } from '@ipld/dag-json'
 
 import { encodeBase64 } from './base64'
 
+/**
+ * Encode bytes into base64 (standard).
+ *
+ * @param bytes - Bytes to encode.
+ * @returns Base64 string.
+ */
 export function bytesToBase64(bytes: Uint8Array): string {
   return encodeBase64(bytes)
 }
 
+/**
+ * JSON stringify helper with stable 2-space indentation.
+ *
+ * @param value - Any JSON-serializable value.
+ * @returns Pretty-printed JSON.
+ */
 export function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
 const dagJsonDecoder = new TextDecoder()
 
+/**
+ * Encode a value as DAG-JSON.
+ *
+ * @param value - Value to encode.
+ * @returns Encoded string.
+ *
+ * @remarks
+ * Falls back to {@link prettyJson} if DAG-JSON encoding fails.
+ */
 export function toDagJsonString(value: unknown): string {
   try {
     return dagJsonDecoder.decode(encodeDagJson(value as unknown))
@@ -21,6 +42,12 @@ export function toDagJsonString(value: unknown): string {
   }
 }
 
+/**
+ * Like {@link toDagJsonString} but attempts to re-parse and re-print as pretty JSON.
+ *
+ * @param value - Value to encode.
+ * @returns A human-friendly string.
+ */
 export function toPrettyDagJsonString(value: unknown): string {
   const dagJson = toDagJsonString(value)
   try {
@@ -31,6 +58,12 @@ export function toPrettyDagJsonString(value: unknown): string {
   }
 }
 
+/**
+ * Format a Unix timestamp (seconds) into an ISO label and a Date.
+ *
+ * @param seconds - Unix timestamp in seconds.
+ * @returns Label + Date (null when unset).
+ */
 export function formatTimestamp(seconds: number | null | undefined): { label: string, date: Date | null } {
   if (seconds == null)
     return { label: 'Not set', date: null }
@@ -38,6 +71,12 @@ export function formatTimestamp(seconds: number | null | undefined): { label: st
   return { label: date.toISOString(), date }
 }
 
+/**
+ * Render a human-readable relative time string from a Date.
+ *
+ * @param target - Target date.
+ * @returns Relative string (e.g. "in 5 minutes", "2 hours ago", or "—").
+ */
 export function relativeTime(target: Date | null): string {
   if (!target)
     return '—'
