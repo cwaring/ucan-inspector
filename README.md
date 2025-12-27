@@ -50,6 +50,7 @@ The exported helpers include intentionally malformed samples so you can verify w
 - `delegation`: a valid delegation
 - `invocation`: a valid invocation
 - `container`: a valid `ctn-v1` container containing a delegation + invocation
+- `containerBase64url`: same container payload, but encoded as base64url (`C` header)
 - `badRawInput`: not base64/container; triggers UTF-8 fallback notice + envelope decode warning
 - `badContainer`: looks like a container but violates strict CBOR shape (should fail container parsing)
 - `nonCanonicalContainer`: parses, but emits diagnostics for duplicates and ordering

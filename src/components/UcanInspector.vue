@@ -1058,32 +1058,50 @@ onMounted(async () => {
             <p class="mt-1 text-[11px] text-slate-400">
               Quickly inject valid and intentionally malformed examples.
             </p>
-            <div class="mt-3 flex flex-wrap gap-2">
-              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'delegation'" @click="loadMockToken('delegation')">
-                {{ mockLoadingKind === 'delegation' ? 'Loading delegation…' : 'Delegation' }}
-              </button>
-              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'invocation'" @click="loadMockToken('invocation')">
-                {{ mockLoadingKind === 'invocation' ? 'Loading invocation…' : 'Invocation' }}
-              </button>
-              <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'container'" @click="loadMockToken('container')">
-                {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Container' }}
-              </button>
+            <div class="mt-3 space-y-4">
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Valid
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'delegation'" @click="loadMockToken('delegation')">
+                    {{ mockLoadingKind === 'delegation' ? 'Loading delegation…' : 'Delegation' }}
+                  </button>
+                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'invocation'" @click="loadMockToken('invocation')">
+                    {{ mockLoadingKind === 'invocation' ? 'Loading invocation…' : 'Invocation' }}
+                  </button>
+                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'container'" @click="loadMockToken('container')">
+                    {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Container' }}
+                  </button>
 
-              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'nonCanonicalContainer'" @click="loadMockToken('nonCanonicalContainer')">
-                {{ mockLoadingKind === 'nonCanonicalContainer' ? 'Loading…' : 'Non-canonical container' }}
-              </button>
+                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'containerBase64url'" @click="loadMockToken('containerBase64url')">
+                    {{ mockLoadingKind === 'containerBase64url' ? 'Loading…' : 'Container (base64url)' }}
+                  </button>
+                </div>
+              </div>
 
-              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'tamperedDelegation'" @click="loadMockToken('tamperedDelegation')">
-                {{ mockLoadingKind === 'tamperedDelegation' ? 'Loading…' : 'Tampered delegation' }}
-              </button>
+              <div>
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  Malformed
+                </p>
+                <div class="mt-2 flex flex-wrap gap-2">
+                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'nonCanonicalContainer'" @click="loadMockToken('nonCanonicalContainer')">
+                    {{ mockLoadingKind === 'nonCanonicalContainer' ? 'Loading…' : 'Non-canonical container' }}
+                  </button>
 
-              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badContainer'" @click="loadMockToken('badContainer')">
-                {{ mockLoadingKind === 'badContainer' ? 'Loading…' : 'Invalid container' }}
-              </button>
+                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'tamperedDelegation'" @click="loadMockToken('tamperedDelegation')">
+                    {{ mockLoadingKind === 'tamperedDelegation' ? 'Loading…' : 'Tampered delegation' }}
+                  </button>
 
-              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badRawInput'" @click="loadMockToken('badRawInput')">
-                {{ mockLoadingKind === 'badRawInput' ? 'Loading…' : 'Invalid raw input' }}
-              </button>
+                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badContainer'" @click="loadMockToken('badContainer')">
+                    {{ mockLoadingKind === 'badContainer' ? 'Loading…' : 'Invalid container' }}
+                  </button>
+
+                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badRawInput'" @click="loadMockToken('badRawInput')">
+                    {{ mockLoadingKind === 'badRawInput' ? 'Loading…' : 'Invalid raw input' }}
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 

@@ -11,6 +11,16 @@ import { Invocation } from 'iso-ucan/invocation'
 
 import { encodeBase64 } from './base64'
 
+function compareBytes(left: Uint8Array, right: Uint8Array): number {
+  const minLength = Math.min(left.length, right.length)
+  for (let index = 0; index < minLength; index += 1) {
+    const diff = left[index]! - right[index]!
+    if (diff !== 0)
+      return diff
+  }
+  return left.length - right.length
+}
+
 const signatureResolver = new SignatureResolver(
   {
     ...eddsaVerifier,
@@ -27,6 +37,7 @@ export interface MockTokens {
   delegation: string
   invocation: string
   container: string
+  containerBase64url: string
   badRawInput: string
   badContainer: string
   nonCanonicalContainer: string
@@ -89,8 +100,11 @@ async function buildMockTokens(): Promise<MockTokens> {
     isRevoked: async () => false,
   })
 
-  const containerBytes = encodeCbor({ 'ctn-v1': [delegation.bytes, invocation.bytes] })
+  const canonicalTokens = [delegation.bytes, invocation.bytes].sort(compareBytes)
+
+  const containerBytes = encodeCbor({ 'ctn-v1': canonicalTokens })
   const container = `B${encodeBase64(containerBytes)}`
+  const containerBase64url = `C${encodeBase64(containerBytes, 'url')}`
 
   // Intentionally malformed inputs for exercising warnings/notices in the UI.
   // 1) Not base64/base64url -> triggers UTF-8 fallback notice + envelope decode warning.
@@ -114,6 +128,7 @@ async function buildMockTokens(): Promise<MockTokens> {
     delegation: delegation.toString(),
     invocation: encodeBase64(invocation.bytes),
     container,
+    containerBase64url,
     badRawInput,
     badContainer,
     nonCanonicalContainer,
