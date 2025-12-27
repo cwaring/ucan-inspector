@@ -3,10 +3,17 @@ import type { Base64Variant } from './base64'
 import { decode as decodeCbor } from 'cborg'
 import { ungzip } from 'pako'
 
-import { decodeBase64 } from './base64'
+import { decodeBase64, encodeBase64 } from './base64'
 
 export type ContainerEncoding = 'raw' | 'base64' | 'base64url'
 export type ContainerCompression = 'none' | 'gzip'
+export type ContainerDiagnosticLevel = 'notice' | 'warn'
+
+export interface ContainerDiagnostic {
+  level: ContainerDiagnosticLevel
+  code: string
+  message: string
+}
 
 export interface ContainerHeader {
   raw: number
@@ -19,10 +26,15 @@ export interface ContainerParseResult {
   payloadBytes: Uint8Array
   cbor: unknown
   tokens: Uint8Array[]
+  diagnostics: ContainerDiagnostic[]
 }
 
 export class ContainerParseError extends Error {
-  constructor(message: string, public readonly stage: 'header' | 'decode' | 'decompress' | 'cbor') {
+  constructor(
+    message: string,
+    public readonly stage: 'header' | 'decode' | 'decompress' | 'cbor',
+    public readonly code: string = 'container_parse_error',
+  ) {
     super(message)
     this.name = 'ContainerParseError'
   }
@@ -37,40 +49,105 @@ const headerTable: Record<number, { encoding: ContainerEncoding, compression: Co
   0x50: { encoding: 'base64url', compression: 'gzip', variant: 'url' }, // P
 }
 
-export function isLikelyContainer(input: string): boolean {
-  if (!input)
-    return false
-  const headerChar = input.charCodeAt(0)
-  return headerChar in headerTable
+const textHeaderTable: Record<number, { encoding: Exclude<ContainerEncoding, 'raw'>, compression: ContainerCompression, variant: Base64Variant }> = {
+  0x42: { encoding: 'base64', compression: 'none', variant: 'standard' }, // B
+  0x43: { encoding: 'base64url', compression: 'none', variant: 'url' }, // C
+  0x4F: { encoding: 'base64', compression: 'gzip', variant: 'standard' }, // O
+  0x50: { encoding: 'base64url', compression: 'gzip', variant: 'url' }, // P
 }
 
-export function parseContainer(input: string): ContainerParseResult {
+export function looksLikeContainerHeader(input: string): boolean {
   if (!input)
-    throw new ContainerParseError('Input is empty', 'header')
+    return false
+  return input.charCodeAt(0) in headerTable
+}
 
-  const headerChar = input.charCodeAt(0)
-  const headerInfo = headerTable[headerChar]
+export function parseUcanContainerText(input: string): ContainerParseResult {
+  const value = input.trim()
+  if (!value)
+    throw new ContainerParseError('Input is empty', 'header', 'empty_input')
+
+  const diagnostics: ContainerDiagnostic[] = []
+  const headerChar = value.charCodeAt(0)
+  const headerInfo = textHeaderTable[headerChar]
+  if (!headerInfo) {
+    if (headerChar in headerTable) {
+      const headerAscii = String.fromCharCode(headerChar)
+      throw new ContainerParseError(
+        `Header '${headerAscii}' indicates a raw-bytes container. Text input only supports B/C/O/P containers.`,
+        'header',
+        'raw_bytes_header_in_text',
+      )
+    }
+    throw new ContainerParseError(`Unknown header byte: 0x${headerChar.toString(16)}`, 'header', 'unknown_header')
+  }
+
+  const encodedPayload = value.slice(1).trim()
+  if (!encodedPayload)
+    throw new ContainerParseError('Container payload is empty', 'decode', 'empty_payload')
+
+  const normalized = normalizeEncodedPayload(encodedPayload, headerInfo.variant, diagnostics)
+  const decodedBytes = decodeBase64WithContext(normalized, headerInfo.variant)
+  return parseDecodedBytes({
+    headerRaw: headerChar,
+    headerEncoding: headerInfo.encoding,
+    headerCompression: headerInfo.compression,
+    encodedBytes: decodedBytes,
+    diagnostics,
+  })
+}
+
+export function parseUcanContainerBytes(input: Uint8Array): ContainerParseResult {
+  if (!input.length)
+    throw new ContainerParseError('Input is empty', 'header', 'empty_input')
+
+  const diagnostics: ContainerDiagnostic[] = []
+  const headerByte = input[0]!
+  const headerInfo = headerTable[headerByte]
   if (!headerInfo)
-    throw new ContainerParseError(`Unknown header byte: 0x${headerChar.toString(16)}`, 'header')
+    throw new ContainerParseError(`Unknown header byte: 0x${headerByte.toString(16)}`, 'header', 'unknown_header')
 
-  const dataPart = input.slice(1).trim()
-  let bytes: Uint8Array
+  const remainder = input.slice(1)
+  let decodedBytes: Uint8Array
 
   if (headerInfo.encoding === 'raw') {
-    bytes = stringToBytes(dataPart)
+    decodedBytes = remainder
   }
   else {
-    const variant = headerInfo.variant ?? 'standard'
-    bytes = decodeBase64(dataPart, variant)
+    const encoded = new TextDecoder().decode(remainder).trim()
+    const normalized = normalizeEncodedPayload(encoded, headerInfo.variant ?? 'standard', diagnostics)
+    decodedBytes = decodeBase64WithContext(normalized, headerInfo.variant ?? 'standard')
   }
 
-  let payloadBytes = bytes
-  if (headerInfo.compression === 'gzip') {
+  return parseDecodedBytes({
+    headerRaw: headerByte,
+    headerEncoding: headerInfo.encoding,
+    headerCompression: headerInfo.compression,
+    encodedBytes: decodedBytes,
+    diagnostics,
+  })
+}
+
+function parseDecodedBytes({
+  headerRaw,
+  headerEncoding,
+  headerCompression,
+  encodedBytes,
+  diagnostics,
+}: {
+  headerRaw: number
+  headerEncoding: ContainerEncoding
+  headerCompression: ContainerCompression
+  encodedBytes: Uint8Array
+  diagnostics: ContainerDiagnostic[]
+}): ContainerParseResult {
+  let payloadBytes = encodedBytes
+  if (headerCompression === 'gzip') {
     try {
-      payloadBytes = ungzip(bytes)
+      payloadBytes = ungzip(encodedBytes)
     }
     catch (error) {
-      throw new ContainerParseError(`Failed to decompress gzip payload: ${(error as Error).message}`, 'decompress')
+      throw new ContainerParseError(`Failed to decompress gzip payload: ${(error as Error).message}`, 'decompress', 'gzip_decompress_failed')
     }
   }
 
@@ -79,41 +156,161 @@ export function parseContainer(input: string): ContainerParseResult {
     cbor = decodeCbor(payloadBytes)
   }
   catch (error) {
-    throw new ContainerParseError(`Failed to decode CBOR payload: ${(error as Error).message}`, 'cbor')
+    throw new ContainerParseError(`Failed to decode CBOR payload: ${(error as Error).message}`, 'cbor', 'cbor_decode_failed')
   }
 
-  const map = cbor as Record<string, unknown>
-  const tokensRaw = Array.isArray(map?.['ctn-v1']) ? map['ctn-v1'] : undefined
-  if (!tokensRaw)
-    throw new ContainerParseError('CBOR payload does not include "ctn-v1" array', 'cbor')
-
-  const tokens = (tokensRaw as unknown[]).map(entry => ensureUint8Array(entry))
+  const tokens = extractTokensStrict(cbor, diagnostics)
+  diagnoseCanonicality(tokens, diagnostics)
 
   return {
     header: {
-      raw: headerChar,
-      encoding: headerInfo.encoding,
-      compression: headerInfo.compression,
+      raw: headerRaw,
+      encoding: headerEncoding,
+      compression: headerCompression,
     },
     payloadBytes,
     cbor,
     tokens,
+    diagnostics,
   }
 }
 
-function stringToBytes(value: string): Uint8Array {
-  const encoder = new TextEncoder()
-  return encoder.encode(value)
+function decodeBase64WithContext(input: string, variant: Base64Variant): Uint8Array {
+  try {
+    return decodeBase64(input, variant)
+  }
+  catch (error) {
+    throw new ContainerParseError(
+      `Failed to decode ${variant === 'standard' ? 'base64' : 'base64url'} payload: ${(error as Error).message}`,
+      'decode',
+      'base64_decode_failed',
+    )
+  }
 }
 
-function ensureUint8Array(value: unknown): Uint8Array {
-  if (value instanceof Uint8Array)
-    return value
-  if (value instanceof ArrayBuffer)
-    return new Uint8Array(value)
-  if (ArrayBuffer.isView(value))
-    return new Uint8Array((value as ArrayBufferView).buffer.slice((value as ArrayBufferView).byteOffset, (value as ArrayBufferView).byteOffset + (value as ArrayBufferView).byteLength))
-  if (Array.isArray(value))
-    return Uint8Array.from(value)
-  throw new ContainerParseError('Container entry is not binary data', 'decode')
+function normalizeEncodedPayload(input: string, variant: Base64Variant, diagnostics: ContainerDiagnostic[]): string {
+  const value = input.replaceAll(/\s+/g, '')
+  if (variant === 'url') {
+    if (value.includes('=')) {
+      diagnostics.push({
+        level: 'notice',
+        code: 'base64url_padding_present',
+        message: 'Header indicates base64url (no padding) but payload contains padding. Padding will be stripped for decoding.',
+      })
+    }
+    return value.replaceAll('=', '')
+  }
+
+  // standard base64 (padded)
+  if (value.length % 4 !== 0) {
+    diagnostics.push({
+      level: 'notice',
+      code: 'base64_padding_missing',
+      message: 'Header indicates padded base64 but payload length is not a multiple of 4. Padding will be added for decoding.',
+    })
+  }
+  const padLength = (4 - (value.length % 4)) % 4
+  return `${value}${'='.repeat(padLength)}`
+}
+
+function extractTokensStrict(cbor: unknown, diagnostics: ContainerDiagnostic[]): Uint8Array[] {
+  const { keys, get } = asKeyedMap(cbor)
+  if (!keys)
+    throw new ContainerParseError('CBOR payload must be a map/object', 'cbor', 'cbor_not_map')
+
+  if (keys.length !== 1 || keys[0] !== 'ctn-v1') {
+    throw new ContainerParseError(
+      `CBOR payload must be a map with exactly one key "ctn-v1" (found: ${keys.length ? keys.join(', ') : 'none'})`,
+      'cbor',
+      'invalid_container_map_keys',
+    )
+  }
+
+  const tokensRaw = get('ctn-v1')
+  if (!Array.isArray(tokensRaw))
+    throw new ContainerParseError('CBOR payload "ctn-v1" must be an array', 'cbor', 'ctn_v1_not_array')
+
+  if (tokensRaw.length === 0) {
+    diagnostics.push({
+      level: 'notice',
+      code: 'empty_container',
+      message: 'Container contains an empty "ctn-v1" array.',
+    })
+  }
+
+  return tokensRaw.map((entry, index) => {
+    if (!(entry instanceof Uint8Array)) {
+      throw new ContainerParseError(
+        `Container token at index ${index} must be a CBOR byte string (Uint8Array)`,
+        'cbor',
+        'token_not_byte_string',
+      )
+    }
+    return entry
+  })
+}
+
+function asKeyedMap(value: unknown): { keys: string[] | null, get: (key: string) => unknown } {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    if (value instanceof Map) {
+      const keys = Array.from(value.keys()).map(String)
+      return {
+        keys,
+        get: (key: string) => value.get(key),
+      }
+    }
+
+    const record = value as Record<string, unknown>
+    return {
+      keys: Object.keys(record),
+      get: (key: string) => record[key],
+    }
+  }
+
+  return { keys: null, get: () => undefined }
+}
+
+function diagnoseCanonicality(tokens: Uint8Array[], diagnostics: ContainerDiagnostic[]): void {
+  if (tokens.length <= 1)
+    return
+
+  const tokenKeys = tokens.map(token => encodeBase64(token, 'url'))
+  const seen = new Map<string, number>()
+  for (const key of tokenKeys)
+    seen.set(key, (seen.get(key) ?? 0) + 1)
+
+  const duplicateCount = Array.from(seen.values()).filter(count => count > 1).length
+  if (duplicateCount > 0) {
+    diagnostics.push({
+      level: 'warn',
+      code: 'duplicate_tokens',
+      message: `Container contains ${duplicateCount} duplicated token${duplicateCount === 1 ? '' : 's'} (tokens SHOULD NOT be duplicated).`,
+    })
+  }
+
+  let outOfOrder = false
+  for (let i = 1; i < tokens.length; i++) {
+    if (compareBytes(tokens[i - 1]!, tokens[i]!) > 0) {
+      outOfOrder = true
+      break
+    }
+  }
+
+  if (outOfOrder) {
+    diagnostics.push({
+      level: 'warn',
+      code: 'tokens_not_sorted',
+      message: 'Container tokens are not bytewise-sorted. Canonical containers MUST be bytewise sorted for deterministic encoding.',
+    })
+  }
+}
+
+function compareBytes(left: Uint8Array, right: Uint8Array): number {
+  const minLength = Math.min(left.length, right.length)
+  for (let i = 0; i < minLength; i++) {
+    const diff = left[i]! - right[i]!
+    if (diff !== 0)
+      return diff
+  }
+  return left.length - right.length
 }

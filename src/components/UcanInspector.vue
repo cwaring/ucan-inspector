@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { MockTokenKind } from '../utils/mockData'
-import type { AnalysisReport, SignatureStatus, TokenAnalysis } from '../utils/ucanAnalysis'
+import type { AnalysisReport, Issue, SignatureStatus, TokenAnalysis } from '../utils/ucanAnalysis'
 import type { ContainerParseResult } from '../utils/ucanContainer'
 
 import { CID } from 'multiformats/cid'
@@ -10,7 +10,7 @@ import { decodeBase64 } from '../utils/base64'
 import { prettyJson, toDagJsonString, toPrettyDagJsonString } from '../utils/format'
 import { getMockTokens } from '../utils/mockData'
 import { analyseBytes, createReport, stringifyReport } from '../utils/ucanAnalysis'
-import { ContainerParseError, isLikelyContainer, parseContainer } from '../utils/ucanContainer'
+import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '../utils/ucanContainer'
 
 interface InspectorProps {
   defaultToken?: string
@@ -89,6 +89,8 @@ let parseTicket = 0
 const selectedToken = computed(() => tokens.value[selectedTokenIndex.value] ?? null)
 const tokenCount = computed(() => tokens.value.length)
 const hasTokens = computed(() => tokenCount.value > 0)
+const reportIssues = computed<Issue[]>(() => report.value?.issues ?? [])
+const selectedTokenIssues = computed<Issue[]>(() => selectedToken.value?.issues ?? [])
 
 interface DelegationLink {
   id: string
@@ -479,35 +481,38 @@ async function runAnalysis(context: string) {
     let bytesList: Uint8Array[] = []
     let container: ContainerParseResult | undefined
     let source: 'container' | 'raw' = 'raw'
+    const issues: Issue[] = []
 
-    if (isLikelyContainer(raw)) {
-      container = parseContainer(raw)
-      bytesList = container.tokens
-      source = 'container'
-      containerInfo.value = container
-      pushDebug('parse:container', 'info', `Header 0x${container.header.raw.toString(16)}`)
+    if (looksLikeContainerHeader(raw)) {
+      try {
+        container = parseUcanContainerText(raw)
+        bytesList = container.tokens
+        source = 'container'
+        containerInfo.value = container
+        pushDebug('parse:container', 'info', `Header 0x${container.header.raw.toString(16)}`)
+        for (const diagnostic of container.diagnostics) {
+          issues.push({ level: diagnostic.level, code: diagnostic.code, message: diagnostic.message })
+          pushDebug('parse:container-diagnostic', diagnostic.level === 'warn' ? 'error' : 'info', diagnostic.message)
+        }
+      }
+      catch (error) {
+        containerInfo.value = null
+        container = undefined
+        if (error instanceof ContainerParseError) {
+          issues.push({ level: 'warn', code: error.code, message: error.message })
+          pushDebug('parse:container-failed', 'error', `${error.message} (falling back to raw token parsing)`)
+        }
+        else {
+          throw error
+        }
+      }
     }
-    else {
+
+    if (!bytesList.length) {
       containerInfo.value = null
-      const decoders = [
-        () => decodeBase64(raw, 'standard'),
-        () => decodeBase64(raw, 'url'),
-      ] as const
-      let decoded: Uint8Array | null = null
-      for (const decode of decoders) {
-        try {
-          decoded = decode()
-          break
-        }
-        catch {
-          // try next decoder
-        }
-      }
-      if (!decoded) {
-        decoded = new TextEncoder().encode(raw)
-        pushDebug('parse:raw-fallback', 'info', 'Decoding as UTF-8 bytes')
-      }
-      bytesList = [decoded]
+      const decoded = decodeInputToTokenBytes(raw)
+      bytesList = [decoded.bytes]
+      issues.push(...decoded.issues)
     }
 
     const analyses = await Promise.all(bytesList.map((bytes, index) => analyseBytes(bytes, index)))
@@ -529,7 +534,7 @@ async function runAnalysis(context: string) {
     selectedTokenIndex.value = 0
     activeTab.value = 'summary'
 
-    const generatedReport = createReport(source, raw, container, analyses)
+    const generatedReport = createReport(source, raw, container, analyses, issues)
     report.value = generatedReport
     parseState.value = 'ready'
     emit('analysis', generatedReport)
@@ -546,6 +551,32 @@ async function runAnalysis(context: string) {
     pushDebug('parse:error', 'error', message)
     emit('error', message)
   }
+}
+
+function decodeInputToTokenBytes(raw: string): { bytes: Uint8Array, issues: Issue[] } {
+  const trimmed = raw.trim()
+  const issues: Issue[] = []
+  const decoders = [
+    () => decodeBase64(trimmed, 'standard'),
+    () => decodeBase64(trimmed, 'url'),
+  ] as const
+
+  for (const decode of decoders) {
+    try {
+      return { bytes: decode(), issues }
+    }
+    catch {
+      // try next decoder
+    }
+  }
+
+  issues.push({
+    level: 'notice',
+    code: 'raw_utf8_fallback',
+    message: 'Input is not valid base64/base64url; treating it as UTF-8 bytes.',
+  })
+  pushDebug('parse:raw-fallback', 'info', 'Decoding as UTF-8 bytes')
+  return { bytes: new TextEncoder().encode(trimmed), issues }
 }
 
 function updateUrlState(value: string) {
@@ -733,6 +764,17 @@ onMounted(async () => {
           {{ parseError }}
         </p>
 
+        <div v-if="parseState === 'ready' && reportIssues.length" class="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          <p class="font-semibold">
+            Notices & warnings
+          </p>
+          <ul class="mt-1 list-disc space-y-1 pl-5">
+            <li v-for="(issue, idx) in reportIssues" :key="`${issue.code}-${idx}`">
+              <span class="font-semibold">{{ issue.level }}</span>: {{ issue.message }}
+            </li>
+          </ul>
+        </div>
+
         <div v-if="containerInfo" class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
           <div class="flex items center justify-between">
             <span class="text-slate-400">Header byte</span>
@@ -749,6 +791,17 @@ onMounted(async () => {
           <div class="flex items-center justify-between">
             <span class="text-slate-400">Tokens detected</span>
             <span class="font-semibold">{{ containerInfo.tokens.length }}</span>
+          </div>
+
+          <div v-if="containerInfo.diagnostics.length" class="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+            <p class="font-semibold">
+              Container diagnostics
+            </p>
+            <ul class="mt-1 list-disc space-y-1 pl-5">
+              <li v-for="(diag, idx) in containerInfo.diagnostics" :key="`${diag.code}-${idx}`">
+                <span class="font-semibold">{{ diag.level }}</span>: {{ diag.message }}
+              </li>
+            </ul>
           </div>
         </div>
       </section>
@@ -933,13 +986,23 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div v-else-if="selectedToken?.type === 'unknown'" class="rounded-2xl border border-amber-400/20 bg-amber-400/5 p-4 text-sm text-amber-100">
-            <p class="font-semibold">
-              Token could not be decoded as a UCAN delegation or invocation.
+          <div v-else-if="selectedToken && selectedToken.type === 'unknown'" class="rounded-2xl border border-white/10 bg-white/5 p-5 text-slate-200">
+            <p class="text-sm font-semibold text-white">
+              Unable to decode token
             </p>
-            <p v-if="selectedToken.reason" class="mt-1 text-xs text-amber-200/80">
+            <p class="mt-2 text-sm text-slate-300">
               {{ selectedToken.reason }}
             </p>
+            <div v-if="selectedTokenIssues.length" class="mt-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">
+              <p class="font-semibold">
+                Diagnostics
+              </p>
+              <ul class="mt-1 list-disc space-y-1 pl-5">
+                <li v-for="(issue, idx) in selectedTokenIssues" :key="`${issue.code}-${idx}`">
+                  <span class="font-semibold">{{ issue.level }}</span>: {{ issue.message }}
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -993,7 +1056,7 @@ onMounted(async () => {
               Sample tokens
             </p>
             <p class="mt-1 text-[11px] text-slate-400">
-              Quickly inject delegation, invocation, or container examples.
+              Quickly inject valid and intentionally malformed examples.
             </p>
             <div class="mt-3 flex flex-wrap gap-2">
               <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'delegation'" @click="loadMockToken('delegation')">
@@ -1004,6 +1067,22 @@ onMounted(async () => {
               </button>
               <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'container'" @click="loadMockToken('container')">
                 {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Container' }}
+              </button>
+
+              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'nonCanonicalContainer'" @click="loadMockToken('nonCanonicalContainer')">
+                {{ mockLoadingKind === 'nonCanonicalContainer' ? 'Loading…' : 'Non-canonical container' }}
+              </button>
+
+              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'tamperedDelegation'" @click="loadMockToken('tamperedDelegation')">
+                {{ mockLoadingKind === 'tamperedDelegation' ? 'Loading…' : 'Tampered delegation' }}
+              </button>
+
+              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badContainer'" @click="loadMockToken('badContainer')">
+                {{ mockLoadingKind === 'badContainer' ? 'Loading…' : 'Invalid container' }}
+              </button>
+
+              <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badRawInput'" @click="loadMockToken('badRawInput')">
+                {{ mockLoadingKind === 'badRawInput' ? 'Loading…' : 'Invalid raw input' }}
               </button>
             </div>
           </section>

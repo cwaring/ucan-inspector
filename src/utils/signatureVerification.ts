@@ -1,3 +1,4 @@
+import type { DecodedEnvelope } from 'iso-ucan/types'
 import { defaultResolver as didDefaultResolver } from 'iso-did'
 import { verifier as ecdsaVerifier } from 'iso-signatures/verifiers/ecdsa.js'
 import { verifier as eddsaVerifier } from 'iso-signatures/verifiers/eddsa.js'
@@ -5,7 +6,6 @@ import { verifier as eip191Verifier } from 'iso-signatures/verifiers/eip191.js'
 import { Resolver as SignatureResolver } from 'iso-signatures/verifiers/resolver.js'
 import { verifier as rsaVerifier } from 'iso-signatures/verifiers/rsa.js'
 import { Delegation } from 'iso-ucan/delegation'
-import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { verifySignature } from 'iso-ucan/utils'
 
 export type SignatureStatus = 'verified' | 'failed' | 'unsupported'
@@ -50,9 +50,8 @@ export async function verifyDelegationSignature(bytes: Uint8Array): Promise<Sign
   }
 }
 
-export async function verifyInvocationSignature(bytes: Uint8Array): Promise<SignatureVerificationResult> {
+export async function verifyInvocationSignature(envelope: DecodedEnvelope<'inv'>): Promise<SignatureVerificationResult> {
   try {
-    const envelope = decodeEnvelope({ envelope: bytes })
     if (envelope.spec !== 'inv')
       return { status: 'unsupported', reason: `Unsupported payload spec: ${envelope.spec}` }
 

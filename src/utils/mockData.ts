@@ -27,6 +27,10 @@ export interface MockTokens {
   delegation: string
   invocation: string
   container: string
+  badRawInput: string
+  badContainer: string
+  nonCanonicalContainer: string
+  tamperedDelegation: string
 }
 
 export type MockTokenKind = keyof MockTokens
@@ -88,10 +92,32 @@ async function buildMockTokens(): Promise<MockTokens> {
   const containerBytes = encodeCbor({ 'ctn-v1': [delegation.bytes, invocation.bytes] })
   const container = `B${encodeBase64(containerBytes)}`
 
+  // Intentionally malformed inputs for exercising warnings/notices in the UI.
+  // 1) Not base64/base64url -> triggers UTF-8 fallback notice + envelope decode warning.
+  const badRawInput = 'this is not base64 or a UCAN container header'
+
+  // 2) Container with extra key -> strict spec violation, should fail container parse.
+  const badContainerBytes = encodeCbor({ 'ctn-v1': [delegation.bytes], 'extra': true })
+  const badContainer = `B${encodeBase64(badContainerBytes)}`
+
+  // 3) Non-canonical container -> duplicates + non-sorted tokens (warns but still parses).
+  const nonCanonicalContainerBytes = encodeCbor({ 'ctn-v1': [invocation.bytes, delegation.bytes, delegation.bytes] })
+  const nonCanonicalContainer = `B${encodeBase64(nonCanonicalContainerBytes)}`
+
+  // 4) Signature invalid but still decodable -> should produce signature warning.
+  const tamperedBytes = new Uint8Array(delegation.bytes)
+  if (tamperedBytes.length > 0)
+    tamperedBytes[tamperedBytes.length - 1] ^= 0x01
+  const tamperedDelegation = encodeBase64(tamperedBytes)
+
   return {
     delegation: delegation.toString(),
     invocation: encodeBase64(invocation.bytes),
     container,
+    badRawInput,
+    badContainer,
+    nonCanonicalContainer,
+    tamperedDelegation,
   }
 }
 
