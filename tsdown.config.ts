@@ -1,7 +1,6 @@
 import { defineConfig } from 'tsdown'
 import Vue from 'unplugin-vue/rolldown'
-
-import pkg from './package.json'
+import pkg from './package.json' with { type: 'json' }
 
 const version = pkg.version
 
