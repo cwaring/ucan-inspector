@@ -816,7 +816,7 @@ onMounted(async () => {
             Ready when you are
           </h3>
           <p class="max-w-md text-sm">
-            Paste a UCAN delegation or container to see decoded headers, payloads, capability policies, and delegation chains. All processing happens locally in your browser.
+            Paste a UCAN token or container to decode headers, payloads, policies, proofs, and delegation chains. Everything runs locally in your browser.
           </p>
         </div>
 
