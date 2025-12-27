@@ -11,6 +11,16 @@ import { Invocation } from 'iso-ucan/invocation'
 
 import { encodeBase64 } from './base64'
 
+function compareBytes(left: Uint8Array, right: Uint8Array): number {
+  const minLength = Math.min(left.length, right.length)
+  for (let index = 0; index < minLength; index += 1) {
+    const diff = left[index]! - right[index]!
+    if (diff !== 0)
+      return diff
+  }
+  return left.length - right.length
+}
+
 const signatureResolver = new SignatureResolver(
   {
     ...eddsaVerifier,
@@ -27,6 +37,11 @@ export interface MockTokens {
   delegation: string
   invocation: string
   container: string
+  containerBase64url: string
+  badRawInput: string
+  badContainer: string
+  nonCanonicalContainer: string
+  tamperedDelegation: string
 }
 
 export type MockTokenKind = keyof MockTokens
@@ -85,13 +100,39 @@ async function buildMockTokens(): Promise<MockTokens> {
     isRevoked: async () => false,
   })
 
-  const containerBytes = encodeCbor({ 'ctn-v1': [delegation.bytes, invocation.bytes] })
+  const canonicalTokens = [delegation.bytes, invocation.bytes].sort(compareBytes)
+
+  const containerBytes = encodeCbor({ 'ctn-v1': canonicalTokens })
   const container = `B${encodeBase64(containerBytes)}`
+  const containerBase64url = `C${encodeBase64(containerBytes, 'url')}`
+
+  // Intentionally malformed inputs for exercising warnings/notices in the UI.
+  // 1) Not base64/base64url -> triggers UTF-8 fallback notice + envelope decode warning.
+  const badRawInput = 'this is not base64 or a UCAN container header'
+
+  // 2) Container with extra key -> strict spec violation, should fail container parse.
+  const badContainerBytes = encodeCbor({ 'ctn-v1': [delegation.bytes], 'extra': true })
+  const badContainer = `B${encodeBase64(badContainerBytes)}`
+
+  // 3) Non-canonical container -> duplicates + non-sorted tokens (warns but still parses).
+  const nonCanonicalContainerBytes = encodeCbor({ 'ctn-v1': [invocation.bytes, delegation.bytes, delegation.bytes] })
+  const nonCanonicalContainer = `B${encodeBase64(nonCanonicalContainerBytes)}`
+
+  // 4) Signature invalid but still decodable -> should produce signature warning.
+  const tamperedBytes = new Uint8Array(delegation.bytes)
+  if (tamperedBytes.length > 0)
+    tamperedBytes[tamperedBytes.length - 1] ^= 0x01
+  const tamperedDelegation = encodeBase64(tamperedBytes)
 
   return {
     delegation: delegation.toString(),
     invocation: encodeBase64(invocation.bytes),
     container,
+    containerBase64url,
+    badRawInput,
+    badContainer,
+    nonCanonicalContainer,
+    tamperedDelegation,
   }
 }
 

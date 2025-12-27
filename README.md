@@ -6,12 +6,19 @@ A Vue 3 custom element for inspecting UCAN tokens (delegations and invocations) 
 
 ## Features
 
-- Parses raw tokens and UCAN containers (CBOR, optional gzip, base64/base64url)
-- Decodes delegations and invocations via `iso-ucan`, including proofs, args, and CIDs
-- Verifies signatures when possible using `iso-signatures` + `iso-did` (some DID methods may require network access)
-- Shows `nbf`/`exp` status and highlights pending/expired tokens
-- Exports a structured JSON report (copy or download)
-- Optional URL state sync via the `ucan` query parameter
+- Parses UCAN tokens and UCAN Containers (`ctn-v1`) locally in the browser (no server required)
+- Decodes delegations and invocations via `iso-ucan`, and produces a structured `AnalysisReport`
+- Verifies signatures when possible (`iso-signatures` + `iso-did`)
+
+  - Some verification methods may require network access, depending on the DID method used
+- Produces structured diagnostics
+
+  - `issues` at the report level and token level (`notice` / `warn` / `error`)
+  - Container-specific `diagnostics` when parsing `ctn-v1`
+- Helps debug “almost valid” inputs
+
+  - Non-canonical containers (duplicates, non-sorted entries, padding mismatches) can still parse, but emit notices/warnings
+  - If an input starts with a container header byte but fails strict container parsing, the inspector records a warning and falls back to raw token parsing
 
 ## Quick start
 
@@ -34,6 +41,21 @@ registerUcanInspector()
 
 This package also exports `getMockToken()` and `getMockTokens()` for generating locally signed sample tokens for debugging.
 
+## Mock tokens
+
+In the UI, enable Debug mode to load locally generated samples.
+
+The exported helpers include intentionally malformed samples so you can verify warning paths end-to-end:
+
+- `delegation`: a valid delegation
+- `invocation`: a valid invocation
+- `container`: a valid `ctn-v1` container containing a delegation + invocation
+- `containerBase64url`: same container payload, but encoded as base64url (`C` header)
+- `badRawInput`: not base64/container; triggers UTF-8 fallback notice + envelope decode warning
+- `badContainer`: looks like a container but violates strict CBOR shape (should fail container parsing)
+- `nonCanonicalContainer`: parses, but emits diagnostics for duplicates and ordering
+- `tamperedDelegation`: decodes but signature verification fails
+
 ## Component API
 
 | Prop | Type | Default | Description |
@@ -50,6 +72,45 @@ This package also exports `getMockToken()` and `getMockTokens()` for generating 
 
 All events bubble from the custom element, making them easy to observe from host pages.
 
+### Report diagnostics
+
+The `analysis` payload includes `issues` at the report and token levels:
+
+- `report.issues[]`
+- `report.tokens[].issues[]`
+
+Each issue is `{ level, code, message }`.
+
+The package exports the types so host apps can consume reports in a type-safe way:
+
+- `AnalysisReport`, `TokenAnalysis`
+- `Issue`, `IssueLevel`
+
+## UCAN Container input formats
+
+This inspector validates the container CBOR shape strictly:
+
+- The decoded CBOR MUST be a map with exactly one key: `ctn-v1`.
+- `ctn-v1` MUST be an array of CBOR byte strings (each entry is one UCAN token's bytes).
+
+In the web component's text input, supported header bytes are:
+
+- `B` = base64 (standard alphabet, padded)
+- `C` = base64url (URL alphabet, no padding)
+- `O` = base64 + gzip
+- `P` = base64url + gzip
+
+The raw-bytes variants (`@` and `M`) are not supported in the text input because arbitrary bytes cannot be represented safely as a plain string.
+
+Notes:
+
+- Non-canonical containers (duplicates, non-sorted entries, padding mismatches) produce notices/warnings.
+- If input starts with a container header byte but fails strict parsing, the inspector records a warning and falls back to raw token parsing.
+
+### Container diagnostics
+
+When a container parses successfully, the report includes `diagnostics` describing canonicality and normalization decisions. These are intended to be developer-friendly and deterministic.
+
 ## Development workflow
 
 ```bash
@@ -63,33 +124,11 @@ pnpm build                # produce the distributable bundle
 
 The playground mounts the custom element and is useful for verifying URL persistence, visual styling, and regression behaviour.
 
-### Tests
+Tip: enable Debug mode in the UI to load sample tokens, including intentionally malformed inputs that exercise diagnostics.
 
-- `test/utils/ucan-container.test.ts` – container header detection, CBOR extraction, and mixed delegation/invocation payloads.
-- `test/utils/ucan-analysis.test.ts` – successful delegation and invocation decoding plus failure handling.
+## Maintainers
 
-Both suites generate UCAN samples at runtime using `iso-ucan` and `iso-signatures` so the coverage stays realistic.
-
-## Dependency patching
-
-This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/utils` (see [`patches/iso-ucan.patch`](./patches/iso-ucan.patch)).
-
-When bumping `iso-ucan`, re-apply the patch:
-
-```bash
-pnpm patch iso-ucan
-# edit package.json to ensure "./utils" is exported (copy the diff in patches/iso-ucan.patch)
-pnpm patch-commit "$(pwd)/node_modules/.pnpm_patches/iso-ucan@<version>"
-```
-
-Then run `pnpm install` and `pnpm test`.
-
-## Project structure
-
-- `src/components/UcanInspector.vue` – the inspector component rendered as a custom element.
-- `src/utils/*` – shared helpers for base64, container parsing, token analysis, and formatting.
-- `scripts/build-css.ts` – UnoCSS token generation for the shadow DOM.
-- `playground/` – Vite playground for manual testing.
+This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/utils` (see `patches/iso-ucan.patch`). Re-apply when bumping `iso-ucan`.
 
 ## License
 

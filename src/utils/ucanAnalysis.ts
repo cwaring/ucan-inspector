@@ -11,6 +11,14 @@ import { verifyDelegationSignature, verifyInvocationSignature } from './signatur
 
 export type TokenKind = 'delegation' | 'invocation' | 'unknown'
 
+export type IssueLevel = 'notice' | 'warn' | 'error'
+
+export interface Issue {
+  level: IssueLevel
+  code: string
+  message: string
+}
+
 interface DelegationPayload {
   iss: string
   aud: string
@@ -144,7 +152,7 @@ interface TokenAnalysisMeta {
   id: string
   index: number
   bytes: Uint8Array
-  errors: string[]
+  issues: Issue[]
   signature: SignatureInsight
 }
 
@@ -155,31 +163,39 @@ export interface AnalysisReport {
   rawInput: string
   container?: ContainerParseResult
   tokens: TokenAnalysis[]
+  issues: Issue[]
   createdAt: string
 }
 
 export async function analyseBytes(bytes: Uint8Array, index: number): Promise<TokenAnalysis> {
   const base64 = encodeBase64(bytes)
   const id = `token-${index}`
-  const failureReasons: string[] = []
 
-  try {
-    return await analyseDelegationToken({ bytes, base64, id, index })
-  }
-  catch (error) {
-    failureReasons.push(formatFailure('Delegation', error))
+  const envelopeResult = decodeEnvelopeSafe(bytes)
+  if (!envelopeResult.ok) {
+    const reason = envelopeResult.issues[0]?.message ?? 'Token could not be decoded'
+    return {
+      id,
+      index,
+      type: 'unknown',
+      reason,
+      tokenBase64: base64,
+      bytes,
+      issues: envelopeResult.issues,
+      signature: {
+        status: 'skipped',
+        reason,
+      },
+    }
   }
 
-  try {
-    return await analyseInvocationToken({ bytes, base64, id, index })
-  }
-  catch (error) {
-    failureReasons.push(formatFailure('Invocation', error))
-  }
+  const { envelope } = envelopeResult
+  if (envelope.spec === 'dlg')
+    return await analyseDelegationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
+  if (envelope.spec === 'inv')
+    return await analyseInvocationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
 
-  const reason = failureReasons[0]?.replace(/^[^:]+:\s*/, '') ?? 'Token could not be decoded'
-  const errorStack = failureReasons.length > 0 ? failureReasons : ['Token could not be decoded']
-
+  const reason = `Unsupported payload spec: ${envelope.spec}`
   return {
     id,
     index,
@@ -187,7 +203,10 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
     reason,
     tokenBase64: base64,
     bytes,
-    errors: errorStack,
+    issues: [
+      ...envelopeResult.issues,
+      { level: 'warn', code: 'unsupported_payload_spec', message: reason },
+    ],
     signature: {
       status: 'skipped',
       reason,
@@ -195,12 +214,19 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
   }
 }
 
-export function createReport(source: 'container' | 'raw', rawInput: string, container: ContainerParseResult | undefined, tokens: TokenAnalysis[]): AnalysisReport {
+export function createReport(
+  source: 'container' | 'raw',
+  rawInput: string,
+  container: ContainerParseResult | undefined,
+  tokens: TokenAnalysis[],
+  issues: Issue[] = [],
+): AnalysisReport {
   return {
     source,
     rawInput,
     container,
     tokens,
+    issues,
     createdAt: new Date().toISOString(),
   }
 }
@@ -209,23 +235,33 @@ export function stringifyReport(report: AnalysisReport): string {
   return prettyJson(report)
 }
 
-function formatFailure(context: string, error: unknown): string {
-  const message = (error as Error | undefined)?.message ?? 'Unknown error'
-  const stack = (error as Error | undefined)?.stack
-  return `${context} decode failed: ${stack ?? message}`
-}
-
-async function analyseDelegationToken({ bytes, base64, id, index }: { bytes: Uint8Array, base64: string, id: string, index: number }): Promise<TokenAnalysis> {
-  const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<'inv' | 'dlg'>
-  if (envelope.spec !== 'dlg')
-    throw new Error(`Unsupported payload spec: ${envelope.spec}`)
-
+async function analyseDelegationEnvelope({
+  envelope,
+  bytes,
+  base64,
+  id,
+  index,
+  initialIssues,
+}: {
+  envelope: DecodedEnvelope<'dlg'>
+  bytes: Uint8Array
+  base64: string
+  id: string
+  index: number
+  initialIssues: Issue[]
+}): Promise<TokenAnalysis> {
+  const issues: Issue[] = [...initialIssues]
   const payload = envelope.payload as DelegationPayload
   const nonce = payload.nonce
+
   const signature = await verifyDelegationSignature(bytes)
-  const errors: string[] = []
-  if (signature.status === 'failed')
-    errors.push(signature.reason ?? 'Signature verification failed')
+  if (signature.status === 'failed') {
+    issues.push({
+      level: 'warn',
+      code: 'signature_invalid',
+      message: signature.reason ?? 'Signature verification failed',
+    })
+  }
 
   const timeline = buildTimeline(payload.exp, payload.nbf ?? undefined)
   const cid = (await computeCid(envelope)).toString()
@@ -279,20 +315,35 @@ async function analyseDelegationToken({ bytes, base64, id, index }: { bytes: Uin
     timeline,
     json,
     bytes,
-    errors,
+    issues,
     signature,
   }
 }
 
-async function analyseInvocationToken({ bytes, base64, id, index }: { bytes: Uint8Array, base64: string, id: string, index: number }): Promise<TokenAnalysis> {
-  const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<'inv' | 'dlg'>
-  if (envelope.spec !== 'inv')
-    throw new Error(`Unsupported payload spec: ${envelope.spec}`)
-
-  const signature = await verifyInvocationSignature(bytes)
-  const errors: string[] = []
-  if (signature.status === 'failed')
-    errors.push(signature.reason ?? 'Signature verification failed')
+async function analyseInvocationEnvelope({
+  envelope,
+  bytes,
+  base64,
+  id,
+  index,
+  initialIssues,
+}: {
+  envelope: DecodedEnvelope<'inv'>
+  bytes: Uint8Array
+  base64: string
+  id: string
+  index: number
+  initialIssues: Issue[]
+}): Promise<TokenAnalysis> {
+  const issues: Issue[] = [...initialIssues]
+  const signature = await verifyInvocationSignature(envelope)
+  if (signature.status === 'failed') {
+    issues.push({
+      level: 'warn',
+      code: 'signature_invalid',
+      message: signature.reason ?? 'Signature verification failed',
+    })
+  }
 
   const payload = envelope.payload as InvocationPayload
   const { nonce, prf, cause: payloadCause, ...payloadRest } = payload
@@ -347,8 +398,34 @@ async function analyseInvocationToken({ bytes, base64, id, index }: { bytes: Uin
     timeline,
     json,
     bytes,
-    errors,
+    issues,
     signature,
+  }
+}
+
+function decodeEnvelopeSafe(bytes: Uint8Array):
+  | { ok: true, envelope: DecodedEnvelope<any>, issues: Issue[] }
+  | { ok: false, issues: Issue[] } {
+  try {
+    const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<any>
+    const issues: Issue[] = []
+
+    if (!envelope.version || !envelope.spec) {
+      issues.push({
+        level: 'notice',
+        code: 'missing_header_fields',
+        message: 'Envelope header is missing version/spec fields.',
+      })
+    }
+
+    return { ok: true, envelope, issues }
+  }
+  catch (error) {
+    const message = (error as Error | undefined)?.message ?? 'Unable to decode envelope'
+    return {
+      ok: false,
+      issues: [{ level: 'warn', code: 'envelope_decode_failed', message }],
+    }
   }
 }
 

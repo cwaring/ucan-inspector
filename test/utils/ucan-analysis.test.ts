@@ -26,7 +26,8 @@ describe('ucan analysis', () => {
   it('returns unknown type for invalid bytes', async () => {
     const analysed = await analyseBytes(new Uint8Array([1, 2, 3, 4]), 0)
     expect(analysed.type).toBe('unknown')
-    expect(analysed.errors.length).toBeGreaterThan(0)
+    expect(analysed.issues.length).toBeGreaterThan(0)
+    expect(analysed.issues.some(issue => issue.code === 'envelope_decode_failed')).toBe(true)
     expect(analysed.signature.status).toBe('skipped')
   })
 
@@ -86,6 +87,7 @@ describe('ucan analysis', () => {
 
     expect(analysed.signature.status).toBe('failed')
     expect(analysed.signature.reason).toBeTruthy()
-    expect(analysed.errors.length).toBeGreaterThan(0)
+    expect(analysed.issues.length).toBeGreaterThan(0)
+    expect(analysed.issues.some(issue => issue.code === 'signature_invalid')).toBe(true)
   })
 })
