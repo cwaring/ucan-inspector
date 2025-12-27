@@ -47,22 +47,14 @@ export function useReportExport(options: {
 
   async function copyReport(): Promise<void> {
     const currentReport = options.report.value
-    if (!currentReport)
+    if (!currentReport || !options.isBrowser)
       return
 
     const serialized = stringifyReport(currentReport)
 
     try {
-      if (typeof navigator !== 'undefined' && navigator?.clipboard) {
+      if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(serialized)
-      }
-      else if (typeof document !== 'undefined') {
-        const element = document.createElement('textarea')
-        element.value = serialized
-        document.body.appendChild(element)
-        element.select()
-        document.execCommand('copy')
-        document.body.removeChild(element)
       }
       else {
         throw new TypeError('Clipboard API not available')
