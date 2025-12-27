@@ -51,6 +51,7 @@ const { reversedDebugEntries, pushDebug, clearDebug } = useDebugLog(50)
 const mockLoadingKind = ref<MockTokenKind | null>(null)
 
 const jsonFormat = ref<JsonFormat>('json')
+const includeRawBytes = ref(false)
 
 const {
   tokens,
@@ -151,6 +152,7 @@ const { canExport, copyReport, downloadReport } = useReportExport({
   report,
   hasTokens,
   jsonFormat,
+  includeRawBytes,
   isBrowser: urlSync.isBrowser,
   pushDebug,
   onExport: payload => emit('reportExport', payload),
@@ -208,6 +210,8 @@ function toggleDebugMode(): void {
     <div class="grid gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
       <InspectorInputPanel
         v-model="inputValue"
+        v-model:json-format="jsonFormat"
+        v-model:include-raw-bytes="includeRawBytes"
         :inspector-version="inspectorVersion"
         :parse-state="parseState"
         :token-count="tokenCount"

@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import type { JsonFormat } from '../../utils/format'
 import type { Issue } from '../../utils/ucanAnalysis'
 import type { ContainerParseResult } from '../../utils/ucanContainer'
 
 defineProps<{
   modelValue: string
+  jsonFormat: JsonFormat
+  includeRawBytes: boolean
   inspectorVersion: string
   parseState: 'idle' | 'parsing' | 'ready' | 'error'
   tokenCount: number
@@ -15,6 +18,8 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', value: string): void
+  (event: 'update:jsonFormat', value: JsonFormat): void
+  (event: 'update:includeRawBytes', value: boolean): void
   (event: 'inspect'): void
   (event: 'clear'): void
   (event: 'toggleDebug'): void
@@ -78,6 +83,30 @@ const emit = defineEmits<{
         @click="emit('toggleDebug')"
       >
         Debug: {{ debugMode ? 'On' : 'Off' }}
+      </button>
+
+      <button
+        class="rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition"
+        :class="jsonFormat === 'dag-json'
+          ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100 hover:border-indigo-300 hover:bg-indigo-500/30'
+          : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/30 hover:bg-white/10'"
+        type="button"
+        :aria-pressed="jsonFormat === 'dag-json'"
+        @click="emit('update:jsonFormat', jsonFormat === 'dag-json' ? 'json' : 'dag-json')"
+      >
+        DAG-JSON: {{ jsonFormat === 'dag-json' ? 'On' : 'Off' }}
+      </button>
+
+      <button
+        class="rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition"
+        :class="includeRawBytes
+          ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100 hover:border-indigo-300 hover:bg-indigo-500/30'
+          : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/30 hover:bg-white/10'"
+        type="button"
+        :aria-pressed="includeRawBytes"
+        @click="emit('update:includeRawBytes', !includeRawBytes)"
+      >
+        Raw bytes: {{ includeRawBytes ? 'On' : 'Off' }}
       </button>
     </div>
 

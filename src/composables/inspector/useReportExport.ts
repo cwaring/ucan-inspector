@@ -23,6 +23,7 @@ export interface UseReportExportReturn {
  * @param options.report - Current report (null when nothing parsed).
  * @param options.hasTokens - Whether there are any decoded tokens available.
  * @param options.jsonFormat - Preferred output format for report serialization.
+ * @param options.includeRawBytes - Whether to include raw byte arrays / CBOR blobs in exports.
  * @param options.isBrowser - True when running in a browser environment.
  * @param options.pushDebug - Debug log hook used by the inspector.
  * @param options.onExport - Called after a successful export action.
@@ -39,6 +40,8 @@ export function useReportExport(options: {
   hasTokens: Readonly<Ref<boolean>> | ComputedRef<boolean>
   /** Preferred output format for report serialization. */
   jsonFormat?: Readonly<Ref<JsonFormat>> | ComputedRef<JsonFormat>
+  /** Whether to include raw byte arrays / CBOR blobs in exports. */
+  includeRawBytes?: Readonly<Ref<boolean>> | ComputedRef<boolean>
   /** True when running in a browser environment. */
   isBrowser: boolean
   /** Debug log hook used by the inspector. */
@@ -54,7 +57,10 @@ export function useReportExport(options: {
       return
 
     const format = options.jsonFormat?.value ?? 'json'
-    const serialized = stringifyReportWithFormat(currentReport, { format })
+    const serialized = stringifyReportWithFormat(currentReport, {
+      format,
+      includeRawBytes: options.includeRawBytes?.value ?? false,
+    })
 
     try {
       if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
@@ -64,7 +70,7 @@ export function useReportExport(options: {
         throw new TypeError('Clipboard API not available')
       }
 
-      options.pushDebug('export:copy', 'info', 'Report copied to clipboard')
+      options.pushDebug('export:copy', 'info', `Report copied to clipboard (${format})`)
       options.onExport({ action: 'copy', report: currentReport })
     }
     catch (error) {
@@ -78,17 +84,22 @@ export function useReportExport(options: {
       return
 
     const format = options.jsonFormat?.value ?? 'json'
-    const serialized = stringifyReportWithFormat(currentReport, { format })
+    const serialized = stringifyReportWithFormat(currentReport, {
+      format,
+      includeRawBytes: options.includeRawBytes?.value ?? false,
+    })
     const blob = new Blob([serialized], { type: 'application/json' })
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `ucan-inspection-${Date.now()}.json`
+
+    const extension = format === 'dag-json' ? 'dag.json' : 'json'
+    link.download = `ucan-inspection-${Date.now()}.${extension}`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(link.href)
 
-    options.pushDebug('export:download', 'info', 'Report downloaded')
+    options.pushDebug('export:download', 'info', `Report downloaded (${format})`)
     options.onExport({ action: 'download', report: currentReport })
   }
 

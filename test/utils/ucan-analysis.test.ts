@@ -100,8 +100,16 @@ describe('ucan analysis', () => {
 
     expect(serialized).not.toContain('"bytes"')
     expect(serialized).not.toContain('"payloadBytes"')
-    expect(serialized).not.toContain('"tokens"')
     expect(serialized).not.toContain('"cbor"')
+
+    // The analyzed token list should be present in default exports.
+    expect(serialized).toContain('"tokens"')
+
+    const dagJson = stringifyReportWithFormat(report, { format: 'dag-json' })
+    expect(dagJson).not.toContain('"bytes"')
+    expect(dagJson).not.toContain('"payloadBytes"')
+    expect(dagJson).not.toContain('"cbor"')
+    expect(dagJson).toContain('"tokens"')
 
     // Still allows explicit raw-bytes export when requested.
     const withBytes = stringifyReportWithFormat(report, { format: 'json', includeRawBytes: true })

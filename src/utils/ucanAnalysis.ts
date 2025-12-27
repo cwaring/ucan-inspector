@@ -353,19 +353,62 @@ export interface StringifyReportOptions {
  */
 export function stringifyReportWithFormat(report: AnalysisReport, options: StringifyReportOptions = {}): string {
   const format = options.format ?? 'json'
+
+  const exportValue = options.includeRawBytes
+    ? report
+    : stripReportBinaryFields(report)
+
   if (format === 'dag-json')
-    return toPrettyDagJsonString(report)
+    return toPrettyDagJsonString(exportValue)
 
   if (options.includeRawBytes)
-    return prettyJson(report)
+    return prettyJson(exportValue)
 
-  return JSON.stringify(report, reportJsonReplacer, 2)
+  return JSON.stringify(exportValue, reportJsonReplacer, 2)
+}
+
+function stripReportBinaryFields(value: unknown): unknown {
+  if (value == null)
+    return value
+
+  if (Array.isArray(value))
+    return value.map(stripReportBinaryFields)
+
+  if (value instanceof Uint8Array)
+    return value
+
+  if (typeof value !== 'object')
+    return value
+
+  const record = value as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+
+  for (const [key, inner] of Object.entries(record)) {
+    // Remove noisy binary fields from exports.
+    // Token bytes are already represented as `tokenBase64`.
+    if (key === 'bytes' || key === 'payloadBytes' || key === 'cbor')
+      continue
+
+    // Container parses include `tokens: Uint8Array[]` (raw token bytes).
+    // Keep the inspector's analyzed `report.tokens` (objects), but drop the raw byte list.
+    if (key === 'tokens' && Array.isArray(inner) && inner.every(v => v instanceof Uint8Array))
+      continue
+
+    result[key] = stripReportBinaryFields(inner)
+  }
+
+  return result
 }
 
 function reportJsonReplacer(key: string, value: unknown): unknown {
   // Remove noisy binary fields from plain JSON exports.
   // Token bytes are already represented as `tokenBase64`.
-  if (key === 'bytes' || key === 'payloadBytes' || key === 'tokens' || key === 'cbor')
+  if (key === 'bytes' || key === 'payloadBytes' || key === 'cbor')
+    return undefined
+
+  // Container parses include `tokens: Uint8Array[]` (raw token bytes).
+  // Keep the inspector's analyzed `report.tokens` (objects), but drop the raw byte list.
+  if (key === 'tokens' && Array.isArray(value) && value.every(v => v instanceof Uint8Array))
     return undefined
 
   // Prevent Uint8Array values from exploding into numeric-key objects.
