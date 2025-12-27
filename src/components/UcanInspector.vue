@@ -11,6 +11,7 @@ import { prettyJson, toDagJsonString, toPrettyDagJsonString } from '../utils/for
 import { getMockTokens } from '../utils/mockData'
 import { analyseBytes, createReport, stringifyReport } from '../utils/ucanAnalysis'
 import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '../utils/ucanContainer'
+import { getInspectorVersion } from '../utils/version'
 
 interface InspectorProps {
   defaultToken?: string
@@ -80,6 +81,8 @@ const activeTab = ref<'summary' | 'payload' | 'header' | 'raw' | 'policy' | 'arg
 const debugMode = ref(false)
 const debugEntries = ref<DebugEntry[]>([])
 const mockLoadingKind = ref<MockTokenKind | null>(null)
+
+const inspectorVersion = getInspectorVersion()
 
 const isBrowser = typeof window !== 'undefined'
 let suppressUrlSync = false
@@ -723,10 +726,11 @@ onMounted(async () => {
       <section class="rounded-3xl border border-white/10 bg-slate-950/60 p-6 backdrop-blur">
         <div>
           <h2 class="text-xl font-semibold text-white">
-            Token input
+            UCAN Inspector <span class="mt-2 text-[11px] text-slate-400"> v{{ inspectorVersion }}</span>
           </h2>
           <p class="mt-1 text-sm text-slate-400">
-            Supports raw UCAN payloads and UCAN containers.
+            Supports UCAN tokens and container formats defined in the
+            <a href="https://ucan.xyz/specification/" target="_blank" rel="noreferrer" class="underline">UCAN v1.0 specification</a>.
           </p>
         </div>
 
