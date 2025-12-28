@@ -7,7 +7,7 @@ import type { DetailTab } from './useUcanInspection'
 
 import { computed, watch } from 'vue'
 
-import { stringifyBlock, stringifyInline } from '../../utils/format'
+import { stringifyInline } from '../../utils/format'
 import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
 
 export interface StatusChip {
@@ -157,7 +157,7 @@ export function useSelectedTokenViewModel(options: {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown')
       return ''
-    return stringifyBlock(token.header, jsonFormat.value)
+    return stringifyExportValue(token.header, jsonFormat.value)
   })
 
   const selectedTokenCid = computed(() => {
@@ -387,21 +387,21 @@ export function useSelectedTokenViewModel(options: {
     const token = options.selectedToken.value
     if (!token || token.type !== 'delegation')
       return '[]'
-    return stringifyBlock(token.payload.pol ?? [], jsonFormat.value)
+    return stringifyExportValue(token.payload.pol ?? [], jsonFormat.value)
   })
 
   const metaJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown' || !token.payload.meta)
       return null
-    return stringifyBlock(token.payload.meta, jsonFormat.value)
+    return stringifyExportValue(token.payload.meta, jsonFormat.value)
   })
 
   const argsJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type !== 'invocation')
       return '{}'
-    return stringifyBlock(token.payload.args ?? {}, jsonFormat.value)
+    return stringifyExportValue(token.payload.args ?? {}, jsonFormat.value)
   })
 
   const proofsList = computed(() => {

@@ -4,10 +4,30 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { decodeBase64, encodeBase64 } from '../../src/utils/base64'
 import { getMockTokens } from '../../src/utils/mockData'
-import { analyseBytes, createReport, stringifyReport, stringifyReportWithFormat } from '../../src/utils/ucanAnalysis'
+import { analyseBytes, buildTokenExportModel, createReport, stringifyExportValue, stringifyReport, stringifyReportWithFormat } from '../../src/utils/ucanAnalysis'
 import { createSampleDelegation } from './utils'
 
 describe('ucan analysis', () => {
+  it('applies delegation payload key order deterministically', () => {
+    const payload = {
+      aud: 'did:example:aud',
+      cmd: '/example/read',
+      exp: 123,
+      iss: 'did:example:iss',
+      nonce: 'AAEC',
+      pol: [],
+      sub: 'did:example:sub',
+    }
+
+    const direct = stringifyExportValue(payload, 'json')
+    const keys = direct
+      .split('\n')
+      .map(line => line.match(/^\s+"([^"]+)":/))
+      .filter(Boolean)
+      .map(match => match![1])
+
+    expect(keys).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
+  })
   it('decodes a delegation token', async () => {
     const sample = await createSampleDelegation()
     const analysed = await analyseBytes(sample.delegation.bytes, 0)
@@ -120,5 +140,24 @@ describe('ucan analysis', () => {
     // Still allows explicit raw-bytes export when requested.
     const withBytes = stringifyReportWithFormat(report, { format: 'json', includeRawBytes: true })
     expect(withBytes).toContain('"bytes"')
+  })
+
+  it('serializes delegation payload fields in spec order', async () => {
+    const sample = await createSampleDelegation()
+    const analysed = await analyseBytes(sample.delegation.bytes, 0)
+    if (analysed.type !== 'delegation')
+      throw new Error('expected delegation analysis')
+
+    const exportToken = buildTokenExportModel(analysed, { includeRawBytes: false })
+    const payload = (exportToken as any)?.json?.envelope?.payload
+    expect(payload).toBeTruthy()
+
+    const extractKeys = (serialized: string): string[] => {
+      return Object.keys(JSON.parse(serialized) as Record<string, unknown>)
+    }
+
+    // Sample delegations omit optional `meta` and `nbf`.
+    expect(extractKeys(stringifyExportValue(payload, 'json'))).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
+    expect(extractKeys(stringifyExportValue(payload, 'dag-json'))).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
   })
 })

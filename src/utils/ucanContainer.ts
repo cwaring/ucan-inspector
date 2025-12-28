@@ -209,6 +209,11 @@ function parseDecodedBytes({
   const tokens = extractTokensStrict(cbor, diagnostics)
   diagnoseCanonicality(tokens, diagnostics)
 
+  // Spec: ordering of tokens MUST NOT matter, but canonical containers MUST be
+  // bytewise sorted for deterministic encoding. For deterministic UI/export
+  // behavior we always expose tokens in canonical bytewise order.
+  const sortedTokens = tokens.length > 1 ? [...tokens].sort(compareBytes) : tokens
+
   return {
     header: {
       raw: headerRaw,
@@ -217,7 +222,7 @@ function parseDecodedBytes({
     },
     payloadBytes,
     cbor,
-    tokens,
+    tokens: sortedTokens,
     diagnostics,
   }
 }

@@ -2,13 +2,14 @@ import type { DecodedEnvelope, InvocationPayload } from 'iso-ucan/types'
 
 import type { SignatureVerificationResult } from './signatureVerification'
 import type { ContainerParseResult } from './ucanContainer'
+import { encode as encodeDagJson } from '@ipld/dag-json'
 import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
 import { CID } from 'multiformats/cid'
 
 import { decodeBase64, encodeBase64 } from './base64'
-import { formatTimestamp, relativeTime, toPrettyDagJsonString } from './format'
+import { formatTimestamp, relativeTime } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
 /** High-level token classification used by the inspector UI. */
@@ -356,8 +357,7 @@ export interface StringifyReportOptions {
 export function stringifyReportWithFormat(report: AnalysisReport, options: StringifyReportOptions = {}): string {
   const format = options.format ?? 'json'
 
-  const exportValue = stripUndefinedDeep(buildReportExportModel(report, { includeRawBytes: options.includeRawBytes ?? false }))
-
+  const exportValue = buildReportExportModel(report, { includeRawBytes: options.includeRawBytes ?? false })
   return stringifyExportValue(exportValue, format)
 }
 
@@ -368,13 +368,37 @@ export function stringifyReportWithFormat(report: AnalysisReport, options: Strin
  * @param format - Output format.
  */
 export function stringifyExportValue(value: unknown, format: ReportStringifyFormat): string {
-  const normalized = stripUndefinedDeep(value)
-  const ordered = sortKeysDeep(normalized)
+  const prepared = prepareExportValue(value, format)
+  return format === 'dag-json'
+    ? toPrettyOrderedDagJsonString(prepared)
+    : JSON.stringify(prepared, reportJsonReplacer, 2)
+}
 
-  if (format === 'dag-json')
-    return toPrettyDagJsonString(ordered)
+const dagJsonDecoder = new TextDecoder()
 
-  return JSON.stringify(replaceCidDeep(ordered), reportJsonReplacer, 2)
+function toPrettyOrderedDagJsonString(value: unknown): string {
+  try {
+    const dagJson = dagJsonDecoder.decode(encodeDagJson(value as unknown))
+    const parsed = JSON.parse(dagJson) as unknown
+    // DAG-JSON encoder canonicalizes map keys; re-apply our preferred order for display.
+    return JSON.stringify(sortKeysDeep(parsed), null, 2)
+  }
+  catch {
+    // Best-effort fallback: keep the existing behavior of returning something readable.
+    try {
+      return JSON.stringify(sortKeysDeep(value), null, 2)
+    }
+    catch {
+      return ''
+    }
+  }
+}
+
+function prepareExportValue(value: unknown, format: ReportStringifyFormat): unknown {
+  const stripped = stripUndefinedDeep(value)
+  const ordered = sortKeysDeep(stripped)
+
+  return format === 'json' ? replaceCidDeep(ordered) : ordered
 }
 
 function stripUndefinedDeep(value: unknown): unknown {
@@ -449,11 +473,93 @@ function sortKeysDeep(value: unknown): unknown {
   const record = value as Record<string, unknown>
   const result: Record<string, unknown> = {}
 
-  const keys = Object.keys(record).sort((a, b) => a.localeCompare(b))
+  const keys = getPreferredKeyOrder(record)
   for (const key of keys)
     result[key] = sortKeysDeep(record[key])
 
   return result
+}
+
+const delegationPayloadKeyOrder = [
+  'iss',
+  'aud',
+  'sub',
+  'cmd',
+  'pol',
+  'nonce',
+  'meta',
+  'nbf',
+  'exp',
+] as const satisfies ReadonlyArray<keyof DelegationJSON['envelope']['payload']>
+
+const invocationPayloadKeyOrder = [
+  'iss',
+  'sub',
+  'aud',
+  'cmd',
+  'args',
+  'prf',
+  'meta',
+  'nonce',
+  'exp',
+  'iat',
+  'cause',
+] as const satisfies ReadonlyArray<keyof InvocationJSON['envelope']['payload']>
+
+const invocationSummaryKeyOrder = [
+  'iss',
+  'sub',
+  'aud',
+  'cmd',
+  'args',
+  'proofs',
+  'meta',
+  'nonce',
+  'nbf',
+  'exp',
+  'iat',
+  'cause',
+] as const satisfies ReadonlyArray<keyof InvocationSummary>
+
+function getPreferredKeyOrder(record: Record<string, unknown>): string[] {
+  const specOrder = getSpecKeyOrder(record)
+  if (!specOrder)
+    return Object.keys(record).sort((a, b) => a.localeCompare(b))
+
+  const ordered: string[] = []
+  const present = new Set(Object.keys(record))
+
+  for (const key of specOrder) {
+    if (present.has(key)) {
+      ordered.push(key)
+      present.delete(key)
+    }
+  }
+
+  if (present.size > 0) {
+    const remaining = Array.from(present).sort((a, b) => a.localeCompare(b))
+    ordered.push(...remaining)
+  }
+
+  return ordered
+}
+
+function getSpecKeyOrder(record: Record<string, unknown>): readonly string[] | null {
+  const hasKeys = (keys: readonly string[]): boolean => keys.every(key => key in record)
+
+  // Delegation payload (both summary + export JSON share these keys).
+  if (hasKeys(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp']))
+    return delegationPayloadKeyOrder
+
+  // Invocation payload (export JSON form uses `prf`).
+  if (hasKeys(['iss', 'sub', 'cmd', 'args', 'prf', 'nonce', 'exp']))
+    return invocationPayloadKeyOrder
+
+  // Invocation summary form (UI-friendly uses `proofs`).
+  if (hasKeys(['iss', 'sub', 'cmd', 'args', 'proofs', 'nonce', 'exp']))
+    return invocationSummaryKeyOrder
+
+  return null
 }
 
 function decodeStandardBase64ToBytesOrNull(value: string): Uint8Array | null {
@@ -587,9 +693,6 @@ function buildReportExportModel(report: AnalysisReport, options: { includeRawByt
 }
 
 function reportJsonReplacer(key: string, value: unknown): unknown {
-  if (value instanceof CID)
-    return value.toString()
-
   // Prevent Uint8Array values from exploding into numeric-key objects.
   // If new binary fields are added in the future, they should be explicitly mapped.
   if (value instanceof Uint8Array)
