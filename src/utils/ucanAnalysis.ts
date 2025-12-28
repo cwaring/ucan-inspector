@@ -2,14 +2,13 @@ import type { DecodedEnvelope, InvocationPayload } from 'iso-ucan/types'
 
 import type { SignatureVerificationResult } from './signatureVerification'
 import type { ContainerParseResult } from './ucanContainer'
-import { encode as encodeDagJson } from '@ipld/dag-json'
 import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
 import { CID } from 'multiformats/cid'
 
 import { decodeBase64, encodeBase64 } from './base64'
-import { formatTimestamp, relativeTime } from './format'
+import { formatTimestamp, relativeTime, toPrettyDagJsonStringWithPostProcess } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
 /** High-level token classification used by the inspector UI. */
@@ -366,42 +365,35 @@ export function stringifyReportWithFormat(report: AnalysisReport, options: Strin
  *
  * @param value - Export model value.
  * @param format - Output format.
+ * @returns Formatted string suitable for copy/download.
  */
 export function stringifyExportValue(value: unknown, format: ReportStringifyFormat): string {
-  const prepared = prepareExportValue(value, format)
+  const prepared = prepareExportValueForSerialization(value, format)
   return format === 'dag-json'
-    ? toPrettyOrderedDagJsonString(prepared)
+    ? toPrettyDagJsonStringWithPostProcess(prepared, applyPreferredKeyOrderDeep)
     : JSON.stringify(prepared, reportJsonReplacer, 2)
 }
 
-const dagJsonDecoder = new TextDecoder()
-
-function toPrettyOrderedDagJsonString(value: unknown): string {
-  try {
-    const dagJson = dagJsonDecoder.decode(encodeDagJson(value as unknown))
-    const parsed = JSON.parse(dagJson) as unknown
-    // DAG-JSON encoder canonicalizes map keys; re-apply our preferred order for display.
-    return JSON.stringify(sortKeysDeep(parsed), null, 2)
-  }
-  catch {
-    // Best-effort fallback: keep the existing behavior of returning something readable.
-    try {
-      return JSON.stringify(sortKeysDeep(value), null, 2)
-    }
-    catch {
-      return ''
-    }
-  }
+function prepareExportValueForSerialization(value: unknown, format: ReportStringifyFormat): unknown {
+  return normalizeForExportSerialization(value, {
+    omitUndefinedProperties: true,
+    cidSerialization: format === 'json' ? 'string' : 'keep',
+  })
 }
 
-function prepareExportValue(value: unknown, format: ReportStringifyFormat): unknown {
-  const stripped = stripUndefinedDeep(value)
-  const ordered = sortKeysDeep(stripped)
+type CidSerialization = 'keep' | 'string'
 
-  return format === 'json' ? replaceCidDeep(ordered) : ordered
+function applyPreferredKeyOrderDeep(value: unknown): unknown {
+  return normalizeForExportSerialization(value, { omitUndefinedProperties: false, cidSerialization: 'keep' })
 }
 
-function stripUndefinedDeep(value: unknown): unknown {
+function normalizeForExportSerialization(
+  value: unknown,
+  options: {
+    omitUndefinedProperties: boolean
+    cidSerialization: CidSerialization
+  },
+): unknown {
   if (value == null)
     return value
 
@@ -409,63 +401,10 @@ function stripUndefinedDeep(value: unknown): unknown {
     return value
 
   if (value instanceof CID)
-    return value
+    return options.cidSerialization === 'string' ? value.toString() : value
 
   if (Array.isArray(value))
-    return value.map(stripUndefinedDeep)
-
-  if (typeof value !== 'object')
-    return value
-
-  const record = value as Record<string, unknown>
-  const result: Record<string, unknown> = {}
-
-  for (const [key, inner] of Object.entries(record)) {
-    if (inner === undefined)
-      continue
-    result[key] = stripUndefinedDeep(inner)
-  }
-
-  return result
-}
-
-function replaceCidDeep(value: unknown): unknown {
-  if (value == null)
-    return value
-
-  if (value instanceof CID)
-    return value.toString()
-
-  if (value instanceof Uint8Array)
-    return value
-
-  if (Array.isArray(value))
-    return value.map(replaceCidDeep)
-
-  if (typeof value !== 'object')
-    return value
-
-  const record = value as Record<string, unknown>
-  const result: Record<string, unknown> = {}
-
-  for (const [key, inner] of Object.entries(record))
-    result[key] = replaceCidDeep(inner)
-
-  return result
-}
-
-function sortKeysDeep(value: unknown): unknown {
-  if (value == null)
-    return value
-
-  if (value instanceof Uint8Array)
-    return value
-
-  if (value instanceof CID)
-    return value
-
-  if (Array.isArray(value))
-    return value.map(sortKeysDeep)
+    return value.map(inner => normalizeForExportSerialization(inner, options))
 
   if (typeof value !== 'object')
     return value
@@ -474,8 +413,12 @@ function sortKeysDeep(value: unknown): unknown {
   const result: Record<string, unknown> = {}
 
   const keys = getPreferredKeyOrder(record)
-  for (const key of keys)
-    result[key] = sortKeysDeep(record[key])
+  for (const key of keys) {
+    const inner = record[key]
+    if (options.omitUndefinedProperties && inner === undefined)
+      continue
+    result[key] = normalizeForExportSerialization(inner, options)
+  }
 
   return result
 }
@@ -586,6 +529,11 @@ function safeCidParseAll(values: string[]): Array<CID | string> {
 
 /**
  * Build a token export model.
+ *
+ * @param token - Token analysis.
+ * @param options - Export options.
+ * @param options.includeRawBytes - Whether to include raw bytes/CBOR blobs.
+ * @returns A format-agnostic export model.
  *
  * @remarks
  * The returned model is format-agnostic:

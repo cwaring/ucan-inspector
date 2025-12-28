@@ -48,6 +48,10 @@ export function toDagJsonString(value: unknown): string {
 /**
  * Stringify a value for an inline, one-line display context.
  *
+ * @param value - Value to stringify.
+ * @param format - Output format.
+ * @returns A short string suitable for inline display.
+ *
  * @remarks
  * - `dag-json` uses DAG-JSON encoding (useful for bytes/CIDs).
  * - `json` avoids dumping `Uint8Array` as numeric-key objects by encoding bytes as base64.
@@ -71,6 +75,10 @@ export function stringifyInline(value: unknown, format: JsonFormat): string {
 /**
  * Stringify a value for a preformatted block display context.
  *
+ * @param value - Value to stringify.
+ * @param format - Output format.
+ * @returns A pretty-printed string suitable for `<pre>` blocks.
+ *
  * @remarks
  * - `dag-json` uses pretty DAG-JSON.
  * - `json` uses stable 2-space JSON.
@@ -86,9 +94,28 @@ export function stringifyBlock(value: unknown, format: JsonFormat): string {
  * @returns A human-friendly string.
  */
 export function toPrettyDagJsonString(value: unknown): string {
+  return toPrettyDagJsonStringWithPostProcess(value, parsed => parsed)
+}
+
+/**
+ * Pretty-print DAG-JSON while allowing a post-process step on the parsed value.
+ *
+ * @remarks
+ * This is useful when the encoder canonicalizes map keys (re-ordering objects),
+ * but you want deterministic display ordering.
+ *
+ * @param value - Value to encode as DAG-JSON.
+ * @param postProcess - Function applied to the parsed DAG-JSON value prior to pretty-printing.
+ * @returns A human-friendly string.
+ */
+export function toPrettyDagJsonStringWithPostProcess(
+  value: unknown,
+  postProcess: (parsed: unknown) => unknown,
+): string {
   const dagJson = toDagJsonString(value)
   try {
-    return prettyJson(JSON.parse(dagJson))
+    const parsed = JSON.parse(dagJson) as unknown
+    return prettyJson(postProcess(parsed))
   }
   catch {
     return dagJson
