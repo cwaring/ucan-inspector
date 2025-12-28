@@ -1,4 +1,5 @@
 import { encode as encodeDagJson } from '@ipld/dag-json'
+import { formatDistanceStrict, fromUnixTime } from 'date-fns'
 
 import { encodeBase64 } from './base64'
 
@@ -96,7 +97,7 @@ export function toPrettyDagJsonStringWithPostProcess(
 export function formatTimestamp(seconds: number | null | undefined): { label: string, date: Date | null } {
   if (seconds == null)
     return { label: 'Not set', date: null }
-  const date = new Date(seconds * 1000)
+  const date = fromUnixTime(seconds)
   return { label: date.toISOString(), date }
 }
 
@@ -105,28 +106,17 @@ function relativeTimeFromMillis(targetMillis: number | null, nowMillis: number):
     return '—'
 
   const diff = targetMillis - nowMillis
-  const absDiff = Math.abs(diff)
-  const minutesRaw = absDiff / 60000
-  const minutes = diff >= 0 ? Math.ceil(minutesRaw) : Math.floor(minutesRaw)
-  if (minutes < 1)
-    return diff >= 0 ? 'in <1 minute' : '<1 minute ago'
-  if (minutes < 60)
-    return diff >= 0 ? `in ${minutes} minute${minutes === 1 ? '' : 's'}` : `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  const hoursRaw = minutesRaw / 60
-  const hours = diff >= 0 ? Math.ceil(hoursRaw) : Math.floor(hoursRaw)
-  if (hours < 48)
-    return diff >= 0 ? `in ${hours} hour${hours === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'} ago`
-  const daysRaw = hoursRaw / 24
-  const days = diff >= 0 ? Math.ceil(daysRaw) : Math.floor(daysRaw)
-  if (days < 60)
-    return diff >= 0 ? `in ${days} day${days === 1 ? '' : 's'}` : `${days} day${days === 1 ? '' : 's'} ago`
-  const monthsRaw = daysRaw / 30
-  const months = diff >= 0 ? Math.ceil(monthsRaw) : Math.floor(monthsRaw)
-  if (months < 24)
-    return diff >= 0 ? `in ${months} month${months === 1 ? '' : 's'}` : `${months} month${months === 1 ? '' : 's'} ago`
-  const yearsRaw = daysRaw / 365
-  const years = diff >= 0 ? Math.ceil(yearsRaw) : Math.floor(yearsRaw)
-  return diff >= 0 ? `in ${years} year${years === 1 ? '' : 's'}` : `${years} year${years === 1 ? '' : 's'} ago`
+  const roundingMethod = diff >= 0 ? 'ceil' : 'floor'
+  const raw = formatDistanceStrict(
+    new Date(targetMillis),
+    new Date(nowMillis),
+    { addSuffix: true, roundingMethod },
+  )
+
+  // date-fns uses "less than a minute" for very small durations; preserve our compact copy.
+  return raw
+    .replace('less than a minute', '<1 minute')
+    .replace('about ', '')
 }
 
 /**

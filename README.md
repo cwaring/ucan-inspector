@@ -126,6 +126,12 @@ The playground mounts the custom element and is useful for verifying URL persist
 
 Tip: enable Debug mode in the UI to load sample tokens, including intentionally malformed inputs that exercise diagnostics.
 
+### Time helpers (tests)
+
+When you need a unix timestamp in seconds, prefer `nowUnixSeconds()` from `src/utils/time.ts`.
+
+It intentionally uses `new Date(Date.now())` (instead of `new Date()`) so Vitest spies/fake timers that mock `Date.now()` behave consistently across the codebase.
+
 ## Maintainers
 
 This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/utils` (see `patches/iso-ucan.patch`). Re-apply when bumping `iso-ucan`.

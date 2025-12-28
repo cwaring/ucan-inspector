@@ -1,6 +1,8 @@
 import { EdDSASigner } from 'iso-signatures/signers/eddsa.js'
 import { Delegation } from 'iso-ucan/delegation'
 
+import { nowUnixSeconds } from '../../src/utils/time'
+
 export interface SampleDelegation {
   delegation: Delegation
   issuer: string
@@ -10,7 +12,7 @@ export interface SampleDelegation {
 export async function createSampleDelegation(): Promise<SampleDelegation> {
   const issuer = await EdDSASigner.generate()
   const audience = await EdDSASigner.generate()
-  const now = Math.floor(Date.now() / 1000)
+  const now = nowUnixSeconds()
 
   const delegation = await Delegation.create({
     iss: issuer,

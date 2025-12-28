@@ -1,4 +1,5 @@
 import { encode as encodeCbor } from 'cborg'
+
 import { defaultResolver as didDefaultResolver } from 'iso-did'
 import { EdDSASigner } from 'iso-signatures/signers/eddsa.js'
 import { verifier as ecdsaVerifier } from 'iso-signatures/verifiers/ecdsa.js'
@@ -10,6 +11,7 @@ import { Delegation } from 'iso-ucan/delegation'
 import { Invocation } from 'iso-ucan/invocation'
 
 import { encodeBase64 } from './base64'
+import { nowUnixSeconds } from './time'
 
 function compareBytes(left: Uint8Array, right: Uint8Array): number {
   const minLength = Math.min(left.length, right.length)
@@ -61,7 +63,7 @@ async function buildMockTokens(): Promise<MockTokens> {
   const invokerSigner = await EdDSASigner.generate()
   const serviceSigner = await EdDSASigner.generate()
 
-  const now = Math.floor(Date.now() / 1000)
+  const now = nowUnixSeconds()
 
   const delegation = await Delegation.create({
     iss: rootSigner,

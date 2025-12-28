@@ -8,6 +8,7 @@ import type { DetailTab } from './useUcanInspection'
 import { computed, onScopeDispose, ref, watch, watchEffect } from 'vue'
 
 import { relativeTimeFromSeconds, stringifyInline } from '../../utils/format'
+import { nowUnixSeconds } from '../../utils/time'
 import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
 
 export interface StatusChip {
@@ -99,7 +100,7 @@ export function useSelectedTokenViewModel(options: {
   /** Preferred JSON formatting for JSON-like views. */
   jsonFormat?: Readonly<Ref<JsonFormat>>
 }): UseSelectedTokenViewModelReturn {
-  const nowSeconds = ref(Math.floor(Date.now() / 1000))
+  const nowSeconds = ref(nowUnixSeconds())
   const nowIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
 
   const timelineStartSeconds = ref<number | null>(null)
@@ -114,9 +115,9 @@ export function useSelectedTokenViewModel(options: {
   const startNowTick = (): void => {
     if (nowIntervalId.value != null)
       return
-    nowSeconds.value = Math.floor(Date.now() / 1000)
+    nowSeconds.value = nowUnixSeconds()
     nowIntervalId.value = setInterval(() => {
-      nowSeconds.value = Math.floor(Date.now() / 1000)
+      nowSeconds.value = nowUnixSeconds()
     }, 1000)
   }
 

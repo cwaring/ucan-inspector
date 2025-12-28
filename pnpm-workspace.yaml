@@ -37,6 +37,7 @@ catalogs:
   prod:
     '@ipld/dag-json': ^10.2.5
     cborg: ^4.3.2
+    date-fns: ^4.0.0
     iso-base: ^4.3.0
     iso-did: ^2.1.1
     iso-signatures: ^0.5.1

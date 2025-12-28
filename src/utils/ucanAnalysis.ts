@@ -2,6 +2,7 @@ import type { DecodedEnvelope, InvocationPayload } from 'iso-ucan/types'
 
 import type { SignatureVerificationResult } from './signatureVerification'
 import type { ContainerParseResult } from './ucanContainer'
+
 import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
@@ -10,6 +11,7 @@ import { CID } from 'multiformats/cid'
 import { decodeBase64, encodeBase64 } from './base64'
 import { formatTimestamp, relativeTime, toPrettyDagJsonStringWithPostProcess } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
+import { nowUnixSeconds } from './time'
 
 /** High-level token classification used by the inspector UI. */
 export type TokenKind = 'delegation' | 'invocation' | 'unknown'
@@ -844,7 +846,7 @@ function decodeEnvelopeSafe(bytes: Uint8Array):
 }
 
 function buildTimeline(exp: number | null, nbf?: number): TokenTimeline {
-  const nowSeconds = Math.floor(Date.now() / 1000)
+  const nowSeconds = nowUnixSeconds()
   const expInfo = formatTimestamp(exp)
   const nbfInfo = formatTimestamp(nbf ?? null)
 
