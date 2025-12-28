@@ -5,8 +5,10 @@ import type { ContainerParseResult } from './ucanContainer'
 import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
-import { encodeBase64 } from './base64'
-import { formatTimestamp, prettyJson, relativeTime, toPrettyDagJsonString } from './format'
+import { CID } from 'multiformats/cid'
+
+import { decodeBase64, encodeBase64 } from './base64'
+import { formatTimestamp, relativeTime, toPrettyDagJsonString } from './format'
 import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
 
 /** High-level token classification used by the inspector UI. */
@@ -354,28 +356,39 @@ export interface StringifyReportOptions {
 export function stringifyReportWithFormat(report: AnalysisReport, options: StringifyReportOptions = {}): string {
   const format = options.format ?? 'json'
 
-  const exportValue = options.includeRawBytes
-    ? report
-    : stripReportBinaryFields(report)
+  const exportValue = stripUndefinedDeep(buildReportExportModel(report, { includeRawBytes: options.includeRawBytes ?? false }))
 
-  if (format === 'dag-json')
-    return toPrettyDagJsonString(exportValue)
-
-  if (options.includeRawBytes)
-    return prettyJson(exportValue)
-
-  return JSON.stringify(exportValue, reportJsonReplacer, 2)
+  return stringifyExportValue(exportValue, format)
 }
 
-function stripReportBinaryFields(value: unknown): unknown {
+/**
+ * Serialize an export model value in the requested format.
+ *
+ * @param value - Export model value.
+ * @param format - Output format.
+ */
+export function stringifyExportValue(value: unknown, format: ReportStringifyFormat): string {
+  const normalized = stripUndefinedDeep(value)
+  const ordered = sortKeysDeep(normalized)
+
+  if (format === 'dag-json')
+    return toPrettyDagJsonString(ordered)
+
+  return JSON.stringify(replaceCidDeep(ordered), reportJsonReplacer, 2)
+}
+
+function stripUndefinedDeep(value: unknown): unknown {
   if (value == null)
     return value
 
-  if (Array.isArray(value))
-    return value.map(stripReportBinaryFields)
-
   if (value instanceof Uint8Array)
     return value
+
+  if (value instanceof CID)
+    return value
+
+  if (Array.isArray(value))
+    return value.map(stripUndefinedDeep)
 
   if (typeof value !== 'object')
     return value
@@ -384,32 +397,198 @@ function stripReportBinaryFields(value: unknown): unknown {
   const result: Record<string, unknown> = {}
 
   for (const [key, inner] of Object.entries(record)) {
-    // Remove noisy binary fields from exports.
-    // Token bytes are already represented as `tokenBase64`.
-    if (key === 'bytes' || key === 'payloadBytes' || key === 'cbor')
+    if (inner === undefined)
       continue
-
-    // Container parses include `tokens: Uint8Array[]` (raw token bytes).
-    // Keep the inspector's analyzed `report.tokens` (objects), but drop the raw byte list.
-    if (key === 'tokens' && Array.isArray(inner) && inner.every(v => v instanceof Uint8Array))
-      continue
-
-    result[key] = stripReportBinaryFields(inner)
+    result[key] = stripUndefinedDeep(inner)
   }
 
   return result
 }
 
-function reportJsonReplacer(key: string, value: unknown): unknown {
-  // Remove noisy binary fields from plain JSON exports.
-  // Token bytes are already represented as `tokenBase64`.
-  if (key === 'bytes' || key === 'payloadBytes' || key === 'cbor')
-    return undefined
+function replaceCidDeep(value: unknown): unknown {
+  if (value == null)
+    return value
 
-  // Container parses include `tokens: Uint8Array[]` (raw token bytes).
-  // Keep the inspector's analyzed `report.tokens` (objects), but drop the raw byte list.
-  if (key === 'tokens' && Array.isArray(value) && value.every(v => v instanceof Uint8Array))
-    return undefined
+  if (value instanceof CID)
+    return value.toString()
+
+  if (value instanceof Uint8Array)
+    return value
+
+  if (Array.isArray(value))
+    return value.map(replaceCidDeep)
+
+  if (typeof value !== 'object')
+    return value
+
+  const record = value as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+
+  for (const [key, inner] of Object.entries(record))
+    result[key] = replaceCidDeep(inner)
+
+  return result
+}
+
+function sortKeysDeep(value: unknown): unknown {
+  if (value == null)
+    return value
+
+  if (value instanceof Uint8Array)
+    return value
+
+  if (value instanceof CID)
+    return value
+
+  if (Array.isArray(value))
+    return value.map(sortKeysDeep)
+
+  if (typeof value !== 'object')
+    return value
+
+  const record = value as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+
+  const keys = Object.keys(record).sort((a, b) => a.localeCompare(b))
+  for (const key of keys)
+    result[key] = sortKeysDeep(record[key])
+
+  return result
+}
+
+function decodeStandardBase64ToBytesOrNull(value: string): Uint8Array | null {
+  try {
+    return decodeBase64(value, 'standard')
+  }
+  catch {
+    return null
+  }
+}
+
+function safeCidParse(value: string): CID | string {
+  try {
+    return CID.parse(value)
+  }
+  catch {
+    return value
+  }
+}
+
+function safeCidParseAll(values: string[]): Array<CID | string> {
+  return values.map(safeCidParse)
+}
+
+/**
+ * Build a token export model.
+ *
+ * @remarks
+ * The returned model is format-agnostic:
+ * - bytes are represented as `Uint8Array` (JSON serializer turns them into base64; DAG-JSON renders IPLD bytes)
+ * - CIDs are represented as `CID` where parseable (JSON serializer turns them into strings; DAG-JSON renders IPLD links)
+ */
+export function buildTokenExportModel(token: TokenAnalysis, options: { includeRawBytes: boolean }): Record<string, unknown> {
+  const includeRawBytes = options.includeRawBytes
+
+  const base: Record<string, unknown> = {
+    id: token.id,
+    index: token.index,
+    type: token.type,
+    tokenBase64: token.tokenBase64,
+    issues: token.issues,
+    signature: token.signature,
+    ...(includeRawBytes ? { bytes: token.bytes } : {}),
+  }
+
+  if (token.type === 'unknown') {
+    return {
+      ...base,
+      reason: token.reason,
+    }
+  }
+
+  const payloadNonceBytes = decodeStandardBase64ToBytesOrNull(token.payload.nonce)
+  const payload: Record<string, unknown> = {
+    ...token.payload,
+    ...(payloadNonceBytes ? { nonce: payloadNonceBytes } : {}),
+  }
+
+  if (token.type === 'invocation') {
+    payload.proofs = safeCidParseAll(token.payload.proofs)
+    payload.cause = token.payload.cause ? safeCidParse(token.payload.cause) : undefined
+  }
+
+  const jsonPayloadNonceBytes = decodeStandardBase64ToBytesOrNull(token.json.envelope.payload.nonce)
+  const jsonSignatureBytes = decodeStandardBase64ToBytesOrNull(token.json.envelope.signature)
+
+  const jsonEnvelopePayload: Record<string, unknown> = {
+    ...token.json.envelope.payload,
+    ...(jsonPayloadNonceBytes ? { nonce: jsonPayloadNonceBytes } : {}),
+  }
+
+  if (token.type === 'invocation') {
+    const prf = (token.json.envelope.payload as InvocationJSON['envelope']['payload']).prf
+    jsonEnvelopePayload.prf = safeCidParseAll(prf)
+
+    const cause = (token.json.envelope.payload as InvocationJSON['envelope']['payload']).cause
+    jsonEnvelopePayload.cause = cause ? safeCidParse(cause) : undefined
+  }
+
+  const jsonEnvelope: Record<string, unknown> = {
+    ...token.json.envelope,
+    payload: jsonEnvelopePayload,
+    ...(jsonSignatureBytes ? { signature: jsonSignatureBytes } : {}),
+  }
+
+  return {
+    ...base,
+    cid: safeCidParse(token.cid),
+    header: token.header,
+    payload,
+    timeline: token.timeline,
+    json: {
+      ...token.json,
+      cid: safeCidParse(token.json.cid),
+      envelope: jsonEnvelope,
+    },
+  }
+}
+
+function buildReportExportModel(report: AnalysisReport, options: { includeRawBytes: boolean }): unknown {
+  const includeRawBytes = options.includeRawBytes
+
+  const container = report.container
+    ? {
+        header: report.container.header,
+        diagnostics: report.container.diagnostics,
+        ...(includeRawBytes
+          ? {
+              payloadBytes: report.container.payloadBytes,
+              cbor: report.container.cbor,
+              tokens: report.container.tokens,
+            }
+          : {}),
+      }
+    : undefined
+
+  const tokens = report.tokens.map(token => buildTokenExportModel(token, { includeRawBytes }))
+
+  const exportReport: Record<string, unknown> = {
+    source: report.source,
+    rawInput: report.rawInput,
+    tokens,
+    issues: report.issues,
+    createdAt: report.createdAt,
+  }
+
+  if (container)
+    exportReport.container = container
+
+  return exportReport
+}
+
+function reportJsonReplacer(key: string, value: unknown): unknown {
+  if (value instanceof CID)
+    return value.toString()
 
   // Prevent Uint8Array values from exploding into numeric-key objects.
   // If new binary fields are added in the future, they should be explicitly mapped.

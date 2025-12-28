@@ -2,7 +2,7 @@ import { encode as encodeEnvelope, getSignaturePayload } from 'iso-ucan/envelope
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBase64 } from '../../src/utils/base64'
+import { decodeBase64, encodeBase64 } from '../../src/utils/base64'
 import { getMockTokens } from '../../src/utils/mockData'
 import { analyseBytes, createReport, stringifyReport, stringifyReportWithFormat } from '../../src/utils/ucanAnalysis'
 import { createSampleDelegation } from './utils'
@@ -106,10 +106,16 @@ describe('ucan analysis', () => {
     expect(serialized).toContain('"tokens"')
 
     const dagJson = stringifyReportWithFormat(report, { format: 'dag-json' })
-    expect(dagJson).not.toContain('"bytes"')
     expect(dagJson).not.toContain('"payloadBytes"')
     expect(dagJson).not.toContain('"cbor"')
     expect(dagJson).toContain('"tokens"')
+
+    if (analysed.type === 'unknown')
+      throw new Error('expected delegation analysis')
+
+    const expectedDagJsonNonce = encodeBase64(decodeBase64(analysed.payload.nonce, 'standard'), 'standard').replace(/=+$/, '')
+    expect(dagJson).toMatch(/"nonce"\s*:\s*\{/)
+    expect(dagJson).toContain(`"bytes": "${expectedDagJsonNonce}"`)
 
     // Still allows explicit raw-bytes export when requested.
     const withBytes = stringifyReportWithFormat(report, { format: 'json', includeRawBytes: true })

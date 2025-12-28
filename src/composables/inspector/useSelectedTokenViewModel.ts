@@ -5,11 +5,10 @@ import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '../..
 import type { SignatureStatusMeta, StatusTone } from './signatureStatusCopy'
 import type { DetailTab } from './useUcanInspection'
 
-import { CID } from 'multiformats/cid'
 import { computed, watch } from 'vue'
 
-import { decodeBase64 } from '../../utils/base64'
 import { stringifyBlock, stringifyInline } from '../../utils/format'
+import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
 
 export interface StatusChip {
   label: string
@@ -99,15 +98,6 @@ export function useSelectedTokenViewModel(options: {
   /** Preferred JSON formatting for JSON-like views. */
   jsonFormat?: Readonly<Ref<JsonFormat>>
 }): UseSelectedTokenViewModelReturn {
-  function safeCidParse(value: string): CID | string {
-    try {
-      return CID.parse(value)
-    }
-    catch {
-      return value
-    }
-  }
-
   const detailTabs = computed<DetailTab[]>(() => {
     const token = options.selectedToken.value
     if (!token)
@@ -134,19 +124,20 @@ export function useSelectedTokenViewModel(options: {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown')
       return ''
-    return stringifyInline(decodeBase64(token.payload.nonce), jsonFormat.value)
+
+    const exportToken = buildTokenExportModel(token, { includeRawBytes: false })
+    const nonce = (exportToken as any)?.json?.envelope?.payload?.nonce
+    return stringifyInline(nonce, jsonFormat.value)
   })
 
   const selectedCauseDagJson = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type !== 'invocation')
       return ''
-    if (!token.payload.cause)
-      return ''
 
-    const rawCause = token.payload.cause
-    const causeForDisplay = jsonFormat.value === 'dag-json' ? safeCidParse(rawCause) : rawCause
-    return stringifyInline(causeForDisplay, jsonFormat.value)
+    const exportToken = buildTokenExportModel(token, { includeRawBytes: false })
+    const cause = (exportToken as any)?.json?.envelope?.payload?.cause
+    return stringifyInline(cause, jsonFormat.value)
   })
 
   const selectedPayloadJson = computed(() => {
@@ -154,71 +145,12 @@ export function useSelectedTokenViewModel(options: {
     if (!token || token.type === 'unknown')
       return ''
 
-    const format = jsonFormat.value
+    const exportToken = buildTokenExportModel(token, { includeRawBytes: false })
+    const payload = (exportToken as any)?.json?.envelope?.payload
+    if (!payload)
+      return ''
 
-    if (token.type === 'delegation') {
-      const payload = token.payload
-
-      if (format === 'dag-json') {
-        return stringifyBlock({
-          iss: payload.iss,
-          aud: payload.aud,
-          sub: payload.sub ?? null,
-          cmd: payload.cmd,
-          pol: payload.pol,
-          exp: payload.exp,
-          nbf: payload.nbf,
-          nonce: decodeBase64(payload.nonce),
-          meta: payload.meta,
-        }, format)
-      }
-
-      return stringifyBlock({
-        iss: payload.iss,
-        aud: payload.aud,
-        sub: payload.sub ?? null,
-        cmd: payload.cmd,
-        pol: payload.pol,
-        exp: payload.exp,
-        nbf: payload.nbf,
-        nonce: payload.nonce,
-        meta: payload.meta,
-      }, format)
-    }
-
-    const payload = token.payload
-
-    if (format === 'dag-json') {
-      return stringifyBlock({
-        iss: payload.iss,
-        aud: payload.aud,
-        sub: payload.sub,
-        cmd: payload.cmd,
-        args: payload.args ?? {},
-        prf: payload.proofs.map(proof => safeCidParse(proof)),
-        cause: payload.cause ? safeCidParse(payload.cause) : undefined,
-        exp: payload.exp,
-        nbf: payload.nbf,
-        iat: payload.iat,
-        meta: payload.meta,
-        nonce: decodeBase64(payload.nonce),
-      }, format)
-    }
-
-    return stringifyBlock({
-      iss: payload.iss,
-      aud: payload.aud,
-      sub: payload.sub,
-      cmd: payload.cmd,
-      args: payload.args ?? {},
-      prf: payload.proofs,
-      cause: payload.cause,
-      exp: payload.exp,
-      nbf: payload.nbf,
-      iat: payload.iat,
-      meta: payload.meta,
-      nonce: payload.nonce,
-    }, format)
+    return stringifyExportValue(payload, jsonFormat.value)
   })
 
   const selectedHeaderJson = computed(() => {

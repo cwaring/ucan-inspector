@@ -96,18 +96,6 @@ const emit = defineEmits<{
       >
         DAG-JSON: {{ jsonFormat === 'dag-json' ? 'On' : 'Off' }}
       </button>
-
-      <button
-        class="rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition"
-        :class="includeRawBytes
-          ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100 hover:border-indigo-300 hover:bg-indigo-500/30'
-          : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/30 hover:bg-white/10'"
-        type="button"
-        :aria-pressed="includeRawBytes"
-        @click="emit('update:includeRawBytes', !includeRawBytes)"
-      >
-        Raw bytes: {{ includeRawBytes ? 'On' : 'Off' }}
-      </button>
     </div>
 
     <p v-if="parseState === 'error'" class="mt-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
