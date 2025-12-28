@@ -5,9 +5,9 @@ import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '../..
 import type { SignatureStatusMeta, StatusTone } from './signatureStatusCopy'
 import type { DetailTab } from './useUcanInspection'
 
-import { computed, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 
-import { stringifyInline } from '../../utils/format'
+import { relativeTimeFromSeconds, stringifyInline } from '../../utils/format'
 import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
 
 export interface StatusChip {
@@ -98,6 +98,15 @@ export function useSelectedTokenViewModel(options: {
   /** Preferred JSON formatting for JSON-like views. */
   jsonFormat?: Readonly<Ref<JsonFormat>>
 }): UseSelectedTokenViewModelReturn {
+  const nowSeconds = ref(Math.floor(Date.now() / 1000))
+  const nowInterval = setInterval(() => {
+    nowSeconds.value = Math.floor(Date.now() / 1000)
+  }, 1000)
+
+  onScopeDispose(() => {
+    clearInterval(nowInterval)
+  })
+
   const detailTabs = computed<DetailTab[]>(() => {
     const token = options.selectedToken.value
     if (!token)
@@ -231,13 +240,19 @@ export function useSelectedTokenViewModel(options: {
     const exp = token.payload.exp
     const nbf = token.payload.nbf ?? null
 
-    if (exp == null)
-      return token.timeline.state === 'expired' ? 100 : 0
+    const now = nowSeconds.value
+    let state: TokenTimeline['state'] = 'none'
+    if (exp != null)
+      state = exp < now ? 'expired' : 'valid'
+    if (nbf != null && nbf > now)
+      state = 'pending'
 
-    const now = Math.floor(Date.now() / 1000)
+    if (exp == null)
+      return state === 'expired' ? 100 : 0
+
     const start = nbf ?? now
     if (exp <= start)
-      return token.timeline.state === 'expired' ? 100 : 0
+      return state === 'expired' ? 100 : 0
 
     const progress = ((now - start) / (exp - start)) * 100
     return Math.max(0, Math.min(100, progress))
@@ -248,10 +263,18 @@ export function useSelectedTokenViewModel(options: {
     if (!token || token.type === 'unknown')
       return null
 
-    const now = Math.floor(Date.now() / 1000)
+    const now = nowSeconds.value
     const exp = token.payload.exp ?? null
     const nbf = token.payload.nbf ?? null
-    const { state, expRelative, nbfRelative } = token.timeline
+
+    let state: TokenTimeline['state'] = 'none'
+    if (exp != null)
+      state = exp < now ? 'expired' : 'valid'
+    if (nbf != null && nbf > now)
+      state = 'pending'
+
+    const expRelative = relativeTimeFromSeconds(exp, now)
+    const nbfRelative = relativeTimeFromSeconds(nbf, now)
 
     const statusLabelMap: Record<typeof state, string> = {
       expired: 'Expired',
