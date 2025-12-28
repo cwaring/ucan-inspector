@@ -5,7 +5,7 @@ import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '../..
 import type { SignatureStatusMeta, StatusTone } from './signatureStatusCopy'
 import type { DetailTab } from './useUcanInspection'
 
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch, watchEffect } from 'vue'
 
 import { relativeTimeFromSeconds, stringifyInline } from '../../utils/format'
 import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
@@ -62,6 +62,7 @@ export interface UseSelectedTokenViewModelReturn {
 
   summaryCards: ComputedRef<SummaryCard[]>
   timeline: ComputedRef<TokenTimeline | null>
+  timelineState: ComputedRef<TokenTimeline['state']>
   timelineProgress: ComputedRef<number>
   timelineSummary: ComputedRef<TimelineSummary | null>
 
@@ -99,12 +100,54 @@ export function useSelectedTokenViewModel(options: {
   jsonFormat?: Readonly<Ref<JsonFormat>>
 }): UseSelectedTokenViewModelReturn {
   const nowSeconds = ref(Math.floor(Date.now() / 1000))
-  const nowInterval = setInterval(() => {
+  const nowIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+
+  const timelineStartSeconds = ref<number | null>(null)
+
+  const stopNowTick = (): void => {
+    if (nowIntervalId.value == null)
+      return
+    clearInterval(nowIntervalId.value)
+    nowIntervalId.value = null
+  }
+
+  const startNowTick = (): void => {
+    if (nowIntervalId.value != null)
+      return
     nowSeconds.value = Math.floor(Date.now() / 1000)
-  }, 1000)
+    nowIntervalId.value = setInterval(() => {
+      nowSeconds.value = Math.floor(Date.now() / 1000)
+    }, 1000)
+  }
+
+  watchEffect(() => {
+    const token = options.selectedToken.value
+    const shouldTick = Boolean(
+      token
+      && token.type !== 'unknown'
+      && (token.payload.exp != null || token.payload.nbf != null),
+    )
+
+    if (shouldTick)
+      startNowTick()
+    else
+      stopNowTick()
+  })
+
+  watch(() => options.selectedToken.value?.id ?? null, () => {
+    const token = options.selectedToken.value
+    if (!token || token.type === 'unknown') {
+      timelineStartSeconds.value = null
+      return
+    }
+
+    const nbf = token.payload.nbf ?? null
+    const iat = token.type === 'invocation' ? (token.payload.iat ?? null) : null
+    timelineStartSeconds.value = nbf ?? iat ?? nowSeconds.value
+  }, { immediate: true })
 
   onScopeDispose(() => {
-    clearInterval(nowInterval)
+    stopNowTick()
   })
 
   const detailTabs = computed<DetailTab[]>(() => {
@@ -232,29 +275,51 @@ export function useSelectedTokenViewModel(options: {
     return token.timeline
   })
 
-  const timelineProgress = computed(() => {
+  const dynamicTimeline = computed(() => {
     const token = options.selectedToken.value
     if (!token || token.type === 'unknown')
-      return 0
-
-    const exp = token.payload.exp
-    const nbf = token.payload.nbf ?? null
+      return null
 
     const now = nowSeconds.value
+    const exp = token.payload.exp ?? null
+    const nbf = token.payload.nbf ?? null
+    const iat = token.type === 'invocation' ? (token.payload.iat ?? null) : null
+    const start = timelineStartSeconds.value ?? nbf ?? iat ?? now
+
     let state: TokenTimeline['state'] = 'none'
     if (exp != null)
       state = exp < now ? 'expired' : 'valid'
     if (nbf != null && nbf > now)
       state = 'pending'
 
-    if (exp == null)
-      return state === 'expired' ? 100 : 0
+    return {
+      now,
+      exp,
+      nbf,
+      start,
+      state,
+      expRelative: relativeTimeFromSeconds(exp, now),
+      nbfRelative: relativeTimeFromSeconds(nbf, now),
+    }
+  })
 
-    const start = nbf ?? now
-    if (exp <= start)
-      return state === 'expired' ? 100 : 0
+  const timelineState = computed<TokenTimeline['state']>(() => {
+    return dynamicTimeline.value?.state ?? timeline.value?.state ?? 'none'
+  })
 
-    const progress = ((now - start) / (exp - start)) * 100
+  const timelineProgress = computed(() => {
+    const info = dynamicTimeline.value
+    if (!info)
+      return 0
+
+    if (info.exp == null)
+      return info.state === 'expired' ? 100 : 0
+
+    const start = info.start
+    if (info.exp <= start)
+      return info.state === 'expired' ? 100 : 0
+
+    const progress = ((info.now - start) / (info.exp - start)) * 100
     return Math.max(0, Math.min(100, progress))
   })
 
@@ -263,18 +328,11 @@ export function useSelectedTokenViewModel(options: {
     if (!token || token.type === 'unknown')
       return null
 
-    const now = nowSeconds.value
-    const exp = token.payload.exp ?? null
-    const nbf = token.payload.nbf ?? null
+    const info = dynamicTimeline.value
+    if (!info)
+      return null
 
-    let state: TokenTimeline['state'] = 'none'
-    if (exp != null)
-      state = exp < now ? 'expired' : 'valid'
-    if (nbf != null && nbf > now)
-      state = 'pending'
-
-    const expRelative = relativeTimeFromSeconds(exp, now)
-    const nbfRelative = relativeTimeFromSeconds(nbf, now)
+    const { now, exp, nbf, state, expRelative, nbfRelative } = info
 
     const statusLabelMap: Record<typeof state, string> = {
       expired: 'Expired',
@@ -356,26 +414,31 @@ export function useSelectedTokenViewModel(options: {
       })
     }
 
-    switch (token.timeline.state) {
+    const timelineInfo = dynamicTimeline.value
+    const timelineState = timelineInfo?.state ?? token.timeline.state
+    const expRelative = timelineInfo?.expRelative ?? token.timeline.expRelative
+    const nbfRelative = timelineInfo?.nbfRelative ?? token.timeline.nbfRelative
+
+    switch (timelineState) {
       case 'expired':
-        chips.push({ label: `Expired ${token.timeline.expRelative}`, tone: 'error' })
+        chips.push({ label: `Expired ${expRelative}`, tone: 'error' })
         break
       case 'pending': {
-        const nbfFuture = token.timeline.nbfRelative.startsWith('in ')
+        const nbfFuture = nbfRelative.startsWith('in ')
         chips.push({
           label: nbfFuture
-            ? `Will become valid ${token.timeline.nbfRelative}`
-            : `Became valid ${token.timeline.nbfRelative}`,
+            ? `Will become valid ${nbfRelative}`
+            : `Became valid ${nbfRelative}`,
           tone: 'warn',
         })
         break
       }
       case 'valid': {
-        const expFuture = token.timeline.expRelative.startsWith('in ')
+        const expFuture = expRelative.startsWith('in ')
         chips.push({
           label: expFuture
-            ? `Active (expires ${token.timeline.expRelative})`
-            : `Became active ${token.timeline.expRelative}`,
+            ? `Active (expires ${expRelative})`
+            : `Became active ${expRelative}`,
           tone: 'success',
         })
         break
@@ -465,6 +528,7 @@ export function useSelectedTokenViewModel(options: {
 
     summaryCards,
     timeline,
+    timelineState,
     timelineProgress,
     timelineSummary,
 

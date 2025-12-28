@@ -116,6 +116,7 @@ const {
   invocationHasCause,
   summaryCards,
   timeline,
+  timelineState,
   timelineProgress,
   timelineSummary,
   statusChips,
@@ -246,6 +247,7 @@ function toggleDebugMode(): void {
             <TokenOverview
               :summary-cards="summaryCards"
               :timeline="timeline"
+              :timeline-state="timelineState"
               :timeline-progress="timelineProgress"
               :timeline-summary="timelineSummary"
             />

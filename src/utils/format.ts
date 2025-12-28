@@ -100,6 +100,35 @@ export function formatTimestamp(seconds: number | null | undefined): { label: st
   return { label: date.toISOString(), date }
 }
 
+function relativeTimeFromMillis(targetMillis: number | null, nowMillis: number): string {
+  if (targetMillis == null)
+    return '—'
+
+  const diff = targetMillis - nowMillis
+  const absDiff = Math.abs(diff)
+  const minutesRaw = absDiff / 60000
+  const minutes = diff >= 0 ? Math.ceil(minutesRaw) : Math.floor(minutesRaw)
+  if (minutes < 1)
+    return diff >= 0 ? 'in <1 minute' : '<1 minute ago'
+  if (minutes < 60)
+    return diff >= 0 ? `in ${minutes} minute${minutes === 1 ? '' : 's'}` : `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  const hoursRaw = minutesRaw / 60
+  const hours = diff >= 0 ? Math.ceil(hoursRaw) : Math.floor(hoursRaw)
+  if (hours < 48)
+    return diff >= 0 ? `in ${hours} hour${hours === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'} ago`
+  const daysRaw = hoursRaw / 24
+  const days = diff >= 0 ? Math.ceil(daysRaw) : Math.floor(daysRaw)
+  if (days < 60)
+    return diff >= 0 ? `in ${days} day${days === 1 ? '' : 's'}` : `${days} day${days === 1 ? '' : 's'} ago`
+  const monthsRaw = daysRaw / 30
+  const months = diff >= 0 ? Math.ceil(monthsRaw) : Math.floor(monthsRaw)
+  if (months < 24)
+    return diff >= 0 ? `in ${months} month${months === 1 ? '' : 's'}` : `${months} month${months === 1 ? '' : 's'} ago`
+  const yearsRaw = daysRaw / 365
+  const years = diff >= 0 ? Math.ceil(yearsRaw) : Math.floor(yearsRaw)
+  return diff >= 0 ? `in ${years} year${years === 1 ? '' : 's'}` : `${years} year${years === 1 ? '' : 's'} ago`
+}
+
 /**
  * Render a human-readable relative time string from a Date.
  *
@@ -107,27 +136,7 @@ export function formatTimestamp(seconds: number | null | undefined): { label: st
  * @returns Relative string (e.g. "in 5 minutes", "2 hours ago", or "—").
  */
 export function relativeTime(target: Date | null): string {
-  if (!target)
-    return '—'
-  const now = Date.now()
-  const diff = target.getTime() - now
-  const absDiff = Math.abs(diff)
-  const minutes = Math.round(absDiff / 60000)
-  if (minutes < 1)
-    return diff >= 0 ? 'in <1 minute' : '<1 minute ago'
-  if (minutes < 60)
-    return diff >= 0 ? `in ${minutes} minute${minutes === 1 ? '' : 's'}` : `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  const hours = Math.round(minutes / 60)
-  if (hours < 48)
-    return diff >= 0 ? `in ${hours} hour${hours === 1 ? '' : 's'}` : `${hours} hour${hours === 1 ? '' : 's'} ago`
-  const days = Math.round(hours / 24)
-  if (days < 60)
-    return diff >= 0 ? `in ${days} day${days === 1 ? '' : 's'}` : `${days} day${days === 1 ? '' : 's'} ago`
-  const months = Math.round(days / 30)
-  if (months < 24)
-    return diff >= 0 ? `in ${months} month${months === 1 ? '' : 's'}` : `${months} month${months === 1 ? '' : 's'} ago`
-  const years = Math.round(days / 365)
-  return diff >= 0 ? `in ${years} year${years === 1 ? '' : 's'}` : `${years} year${years === 1 ? '' : 's'} ago`
+  return relativeTimeFromMillis(target?.getTime() ?? null, Date.now())
 }
 
 /**
@@ -140,42 +149,5 @@ export function relativeTime(target: Date | null): string {
 export function relativeTimeFromSeconds(targetSeconds: number | null | undefined, nowSeconds: number): string {
   if (targetSeconds == null)
     return '—'
-
-  const diffSeconds = targetSeconds - nowSeconds
-  const absDiffSeconds = Math.abs(diffSeconds)
-  const minutes = Math.round(absDiffSeconds / 60)
-
-  if (minutes < 1)
-    return diffSeconds >= 0 ? 'in <1 minute' : '<1 minute ago'
-  if (minutes < 60) {
-    return diffSeconds >= 0
-      ? `in ${minutes} minute${minutes === 1 ? '' : 's'}`
-      : `${minutes} minute${minutes === 1 ? '' : 's'} ago`
-  }
-
-  const hours = Math.round(minutes / 60)
-  if (hours < 48) {
-    return diffSeconds >= 0
-      ? `in ${hours} hour${hours === 1 ? '' : 's'}`
-      : `${hours} hour${hours === 1 ? '' : 's'} ago`
-  }
-
-  const days = Math.round(hours / 24)
-  if (days < 60) {
-    return diffSeconds >= 0
-      ? `in ${days} day${days === 1 ? '' : 's'}`
-      : `${days} day${days === 1 ? '' : 's'} ago`
-  }
-
-  const months = Math.round(days / 30)
-  if (months < 24) {
-    return diffSeconds >= 0
-      ? `in ${months} month${months === 1 ? '' : 's'}`
-      : `${months} month${months === 1 ? '' : 's'} ago`
-  }
-
-  const years = Math.round(days / 365)
-  return diffSeconds >= 0
-    ? `in ${years} year${years === 1 ? '' : 's'}`
-    : `${years} year${years === 1 ? '' : 's'} ago`
+  return relativeTimeFromMillis(targetSeconds * 1000, nowSeconds * 1000)
 }
