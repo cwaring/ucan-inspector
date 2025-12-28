@@ -114,7 +114,7 @@ const emit = defineEmits<{
     </div>
 
     <div v-if="containerInfo" class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-      <div class="flex items center justify-between">
+      <div class="flex items-center justify-between">
         <span class="text-slate-400">Header byte</span>
         <span class="font-mono text-sm">0x{{ containerInfo.header.raw.toString(16).padStart(2, '0') }}</span>
       </div>
