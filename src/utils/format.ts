@@ -6,22 +6,12 @@ import { encodeBase64 } from './base64'
 export type JsonFormat = 'json' | 'dag-json'
 
 /**
- * Encode bytes into base64 (standard).
- *
- * @param bytes - Bytes to encode.
- * @returns Base64 string.
- */
-export function bytesToBase64(bytes: Uint8Array): string {
-  return encodeBase64(bytes)
-}
-
-/**
  * JSON stringify helper with stable 2-space indentation.
  *
  * @param value - Any JSON-serializable value.
  * @returns Pretty-printed JSON.
  */
-export function prettyJson(value: unknown): string {
+function prettyJson(value: unknown): string {
   return JSON.stringify(value, null, 2)
 }
 
@@ -70,31 +60,6 @@ export function stringifyInline(value: unknown, format: JsonFormat): string {
     return value
 
   return String(value)
-}
-
-/**
- * Stringify a value for a preformatted block display context.
- *
- * @param value - Value to stringify.
- * @param format - Output format.
- * @returns A pretty-printed string suitable for `<pre>` blocks.
- *
- * @remarks
- * - `dag-json` uses pretty DAG-JSON.
- * - `json` uses stable 2-space JSON.
- */
-export function stringifyBlock(value: unknown, format: JsonFormat): string {
-  return format === 'dag-json' ? toPrettyDagJsonString(value) : prettyJson(value)
-}
-
-/**
- * Like {@link toDagJsonString} but attempts to re-parse and re-print as pretty JSON.
- *
- * @param value - Value to encode.
- * @returns A human-friendly string.
- */
-export function toPrettyDagJsonString(value: unknown): string {
-  return toPrettyDagJsonStringWithPostProcess(value, parsed => parsed)
 }
 
 /**
