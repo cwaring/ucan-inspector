@@ -1,109 +1,137 @@
 <script setup lang="ts">
-import type { MockTokenKind } from '../utils/mockData'
-import type { AnalysisReport, Issue, SignatureStatus, TokenAnalysis } from '../utils/ucanAnalysis'
-import type { ContainerParseResult } from '../utils/ucanContainer'
+import type { DelegationLink } from '@/components/inspector/types'
+import type { JsonFormat } from '@/utils/format'
+import type { MockTokenKind } from '@/utils/mockData'
+import type { AnalysisReport, Issue } from '@/utils/ucanAnalysis'
 
-import { CID } from 'multiformats/cid'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 
-import { decodeBase64 } from '../utils/base64'
-import { prettyJson, toDagJsonString, toPrettyDagJsonString } from '../utils/format'
-import { getMockTokens } from '../utils/mockData'
-import { analyseBytes, createReport, stringifyReport } from '../utils/ucanAnalysis'
-import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '../utils/ucanContainer'
-import { getInspectorVersion } from '../utils/version'
+import DelegationChainList from '@/components/inspector/DelegationChainList.vue'
+import InspectorDebugPanel from '@/components/inspector/InspectorDebugPanel.vue'
+import InspectorInputPanel from '@/components/inspector/InspectorInputPanel.vue'
+import InspectorResultsHeader from '@/components/inspector/InspectorResultsHeader.vue'
+import ReportExportControls from '@/components/inspector/ReportExportControls.vue'
+import TokenDetailsTabs from '@/components/inspector/TokenDetailsTabs.vue'
+import TokenOverview from '@/components/inspector/TokenOverview.vue'
+
+import { signatureStatusCopy } from '@/composables/inspector/signatureStatusCopy'
+import { useDebouncedCallback } from '@/composables/inspector/useDebouncedCallback'
+import { useDebugLog } from '@/composables/inspector/useDebugLog'
+import { useInspectorInputSync } from '@/composables/inspector/useInspectorInputSync'
+import { useReportExport } from '@/composables/inspector/useReportExport'
+import { useSelectedTokenViewModel } from '@/composables/inspector/useSelectedTokenViewModel'
+import { useUcanInspection } from '@/composables/inspector/useUcanInspection'
+import { useUcanUrlBootstrap } from '@/composables/inspector/useUcanUrlBootstrap'
+import { useUcanUrlSync } from '@/composables/inspector/useUcanUrlSync'
+
+import { getMockTokens } from '@/utils/mockData'
+import { getInspectorVersion } from '@/utils/version'
 
 interface InspectorProps {
-  defaultToken?: string
-  persistUrl?: boolean
-  autoParse?: boolean
-}
-
-interface DebugEntry {
-  id: number
-  timestamp: string
-  stage: string
-  detail?: string
-  level: 'info' | 'error'
-}
-
-type StatusTone = 'info' | 'success' | 'warn' | 'error'
-
-interface StatusChip {
-  label: string
-  tone: StatusTone
-  tooltip?: string
+  ucan?: string
+  syncUrl?: boolean
+  autoInspect?: boolean
 }
 
 const props = withDefaults(defineProps<InspectorProps>(), {
-  defaultToken: '',
-  persistUrl: true,
-  autoParse: true,
+  ucan: '',
+  syncUrl: true,
+  autoInspect: true,
 })
 
 const emit = defineEmits<{
-  (event: 'analysis', payload: AnalysisReport): void
-  (event: 'error', payload: string | null): void
-  (event: 'export', payload: { kind: 'copy' | 'download', report: AnalysisReport }): void
+  (event: 'report', payload: AnalysisReport): void
+  (event: 'reportError', payload: string | null): void
+  (event: 'reportExport', payload: { action: 'copy' | 'download', report: AnalysisReport }): void
 }>()
 
-const signatureStatusCopy: Record<SignatureStatus, { label: string, tone: StatusTone, helper: string }> = {
-  verified: {
-    label: 'Signature verified',
-    tone: 'success',
-    helper: 'Signature matches the issuer’s verification method from the DID document.',
-  },
-  failed: {
-    label: 'Signature invalid',
-    tone: 'error',
-    helper: 'Signature did not match the issuer’s verification method.',
-  },
-  unsupported: {
-    label: 'Verification unavailable',
-    tone: 'warn',
-    helper: 'The DID method or signature type is not supported for offline verification.',
-  },
-  skipped: {
-    label: 'Signature not checked',
-    tone: 'info',
-    helper: 'Signature verification was skipped for this token.',
-  },
-}
-
-const inputValue = ref(props.defaultToken)
-const tokens = ref<TokenAnalysis[]>([])
-const report = ref<AnalysisReport | null>(null)
-const parseState = ref<'idle' | 'parsing' | 'ready' | 'error'>('idle')
-const parseError = ref<string | null>(null)
-const containerInfo = ref<ContainerParseResult | null>(null)
-const selectedTokenIndex = ref(0)
-const activeTab = ref<'summary' | 'payload' | 'header' | 'raw' | 'policy' | 'args' | 'proofs'>('summary')
+const inputValue = ref(props.ucan)
 const debugMode = ref(false)
-const debugEntries = ref<DebugEntry[]>([])
+const { reversedDebugEntries, pushDebug, clearDebug } = useDebugLog(50)
 const mockLoadingKind = ref<MockTokenKind | null>(null)
+
+const jsonFormat = ref<JsonFormat>('json')
+const includeRawBytes = ref(false)
+
+const {
+  tokens,
+  report,
+  parseState,
+  parseError,
+  containerInfo,
+  selectedTokenIndex,
+  activeTab,
+  runAnalysis,
+  clearInput,
+} = useUcanInspection({
+  inputValue,
+  signatureStatusCopy,
+  pushDebug,
+  onReport: report => emit('report', report),
+  onReportError: error => emit('reportError', error),
+})
 
 const inspectorVersion = getInspectorVersion()
 
-const isBrowser = typeof window !== 'undefined'
-let suppressUrlSync = false
-let debounceHandle: ReturnType<typeof setTimeout> | undefined
-let parseTicket = 0
+const urlSync = useUcanUrlSync('ucan')
+
+useUcanUrlBootstrap({
+  urlSync,
+  inputValue,
+  defaultUcan: props.ucan,
+  autoInspect: props.autoInspect,
+  runAnalysis,
+})
+
+const debouncedAnalysis = useDebouncedCallback((context: string) => {
+  runAnalysis(context).catch((error) => {
+    console.error(error)
+  })
+}, 420)
+
+useInspectorInputSync({
+  inputValue,
+  urlSync,
+  ucanProp: () => props.ucan,
+  syncUrl: () => props.syncUrl,
+  autoInspect: () => props.autoInspect,
+  scheduleParse: context => debouncedAnalysis.schedule(context),
+})
 
 const selectedToken = computed(() => tokens.value[selectedTokenIndex.value] ?? null)
 const tokenCount = computed(() => tokens.value.length)
 const hasTokens = computed(() => tokenCount.value > 0)
 const reportIssues = computed<Issue[]>(() => report.value?.issues ?? [])
-const selectedTokenIssues = computed<Issue[]>(() => selectedToken.value?.issues ?? [])
 
-interface DelegationLink {
-  id: string
-  index: number
-  iss: string
-  aud: string
-  cid: string
-}
-
-type DetailTab = 'summary' | 'payload' | 'policy' | 'header' | 'raw' | 'args' | 'proofs'
+const {
+  detailTabs,
+  selectedNonceDagJson,
+  selectedCauseDagJson,
+  selectedPayloadJson,
+  selectedHeaderJson,
+  selectedTokenCid,
+  selectedTokenTokenBase64,
+  selectedTokenType,
+  delegationPolicyPredicateCount,
+  invocationHasCause,
+  summaryCards,
+  timeline,
+  timelineState,
+  timelineProgress,
+  timelineSummary,
+  statusChips,
+  policyJson,
+  metaJson,
+  argsJson,
+  proofsList,
+  signatureSummary,
+  selectedTokenIssues,
+} = useSelectedTokenViewModel({
+  selectedToken,
+  activeTab,
+  signatureStatusCopy,
+  jsonFormat,
+})
 
 const delegationLinks = computed<DelegationLink[]>(() => {
   const links: DelegationLink[] = []
@@ -121,548 +149,15 @@ const delegationLinks = computed<DelegationLink[]>(() => {
   return links
 })
 
-const detailTabs = computed<DetailTab[]>(() => {
-  const token = selectedToken.value
-  if (!token)
-    return []
-  if (token.type === 'delegation')
-    return ['summary', 'payload', 'policy', 'header', 'raw']
-  if (token.type === 'invocation')
-    return ['summary', 'payload', 'args', 'proofs', 'header', 'raw']
-  return []
+const { canExport, copyReport, downloadReport } = useReportExport({
+  report,
+  hasTokens,
+  jsonFormat,
+  includeRawBytes,
+  isBrowser: urlSync.isBrowser,
+  pushDebug,
+  onExport: payload => emit('reportExport', payload),
 })
-
-function safeCidParse(value: string): CID | string {
-  try {
-    return CID.parse(value)
-  }
-  catch {
-    return value
-  }
-}
-
-const selectedNonceDagJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return ''
-  return toDagJsonString(decodeBase64(token.payload.nonce))
-})
-
-const selectedCauseDagJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type !== 'invocation')
-    return ''
-  if (!token.payload.cause)
-    return ''
-  return toDagJsonString(safeCidParse(token.payload.cause))
-})
-
-const selectedPayloadJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return ''
-
-  if (token.type === 'delegation') {
-    const payload = token.payload
-    return toPrettyDagJsonString({
-      iss: payload.iss,
-      aud: payload.aud,
-      sub: payload.sub ?? null,
-      cmd: payload.cmd,
-      pol: payload.pol,
-      exp: payload.exp,
-      nbf: payload.nbf,
-      nonce: decodeBase64(payload.nonce),
-      meta: payload.meta,
-    })
-  }
-
-  const payload = token.payload
-  return toPrettyDagJsonString({
-    iss: payload.iss,
-    aud: payload.aud,
-    sub: payload.sub,
-    cmd: payload.cmd,
-    args: payload.args ?? {},
-    prf: payload.proofs.map(proof => safeCidParse(proof)),
-    cause: payload.cause ? safeCidParse(payload.cause) : undefined,
-    exp: payload.exp,
-    nbf: payload.nbf,
-    iat: payload.iat,
-    meta: payload.meta,
-    nonce: decodeBase64(payload.nonce),
-  })
-})
-
-const selectedHeaderJson = computed(() => {
-  const token = selectedToken.value as any
-  if (!token || token.type === 'unknown')
-    return ''
-  return prettyJson(token.header)
-})
-
-const summaryCards = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return []
-
-  if (token.type === 'delegation') {
-    const payload = token.payload
-    return [
-      { label: 'Issuer', value: payload.iss, helper: 'DID that issued the delegation' },
-      { label: 'Audience', value: payload.aud, helper: 'Delegate receiving authority' },
-      { label: 'Command', value: payload.cmd, helper: 'Capability command path' },
-      { label: 'Subject', value: payload.sub ?? '—', helper: 'Principal the delegation applies to' },
-    ]
-  }
-
-  const payload = token.payload
-  return [
-    { label: 'Issuer', value: payload.iss, helper: 'Invoker issuing the request' },
-    { label: 'Subject', value: payload.sub, helper: 'Principal whose authority is invoked' },
-    { label: 'Audience', value: payload.aud ?? '—', helper: 'Target service or recipient' },
-    { label: 'Command', value: payload.cmd, helper: 'Capability command path' },
-  ]
-})
-
-const timeline = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return null
-  return token.timeline
-})
-
-const timelineProgress = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return 0
-  const exp = token.payload.exp
-  const nbf = token.payload.nbf ?? null
-  if (exp == null)
-    return token.timeline.state === 'expired' ? 100 : 0
-  const now = Math.floor(Date.now() / 1000)
-  const start = nbf ?? now
-  if (exp <= start)
-    return token.timeline.state === 'expired' ? 100 : 0
-  const progress = ((now - start) / (exp - start)) * 100
-  return Math.max(0, Math.min(100, progress))
-})
-
-const timelineSummary = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return null
-
-  const now = Math.floor(Date.now() / 1000)
-  const exp = token.payload.exp ?? null
-  const nbf = token.payload.nbf ?? null
-  const { state, expRelative, nbfRelative } = token.timeline
-
-  const statusLabelMap: Record<typeof state, string> = {
-    expired: 'Expired',
-    valid: 'Active',
-    pending: 'Pending',
-    none: 'No expiration',
-  }
-
-  const formatFuture = (relative: string): string => {
-    if (relative === '—')
-      return 'for an unknown duration'
-    if (relative.startsWith('in ')) {
-      const remainder = relative.slice(3)
-      if (remainder === '<1 minute')
-        return 'for less than a minute'
-      return `for another ${remainder}`
-    }
-    return relative
-  }
-
-  let expText: string | null = null
-  if (exp != null && expRelative !== '—') {
-    if (exp <= now)
-      expText = `Expired ${expRelative}`
-    else if (state === 'pending')
-      expText = `Active ${formatFuture(expRelative)} once valid`
-    else
-      expText = `Active ${formatFuture(expRelative)}`
-  }
-
-  let nbfText: string | null = null
-  if (nbf == null || nbfRelative === '—') {
-    nbfText = 'Valid immediately'
-  }
-  else if (nbf > now) {
-    nbfText = `Becomes valid ${nbfRelative}`
-  }
-  else {
-    nbfText = `Became valid ${nbfRelative}`
-  }
-
-  if (state === 'none') {
-    expText = null
-    nbfText = null
-  }
-
-  return {
-    statusLabel: statusLabelMap[state],
-    expText,
-    nbfText,
-  }
-})
-
-const statusChips = computed((): StatusChip[] => {
-  const token = selectedToken.value
-  if (!token)
-    return [] as StatusChip[]
-
-  if (token.type === 'unknown')
-    return [{ label: 'Unknown token format', tone: 'warn' }] as StatusChip[]
-
-  const chips: StatusChip[] = []
-
-  const typeTag = typeof token.header?.spec === 'string' ? token.header.spec : ''
-  if (typeTag) {
-    chips.push({
-      label: `Type: ${typeTag}`,
-      tone: 'info',
-      tooltip: 'Token type tag from the decoded UCAN envelope header.',
-    })
-  }
-
-  const specVersion = typeof token.header?.version === 'string' ? token.header.version : ''
-  if (specVersion) {
-    chips.push({
-      label: `Spec: v${specVersion}`,
-      tone: 'info',
-      tooltip: 'UCAN spec version from the decoded envelope header.',
-    })
-  }
-
-  switch (token.timeline.state) {
-    case 'expired':
-      chips.push({ label: `Expired ${token.timeline.expRelative}`, tone: 'error' })
-      break
-    case 'pending': {
-      // If nbf is in the future, use 'Will become valid in X'
-      const nbfFuture = token.timeline.nbfRelative.startsWith('in ')
-      chips.push({
-        label: nbfFuture
-          ? `Will become valid ${token.timeline.nbfRelative}`
-          : `Became valid ${token.timeline.nbfRelative}`,
-        tone: 'warn',
-      })
-      break
-    }
-    case 'valid': {
-      // If exp is in the future, use 'Expires in X', else 'Became active X ago'
-      const expFuture = token.timeline.expRelative.startsWith('in ')
-      chips.push({
-        label: expFuture
-          ? `Active (expires ${token.timeline.expRelative})`
-          : `Became active ${token.timeline.expRelative}`,
-        tone: 'success',
-      })
-      break
-    }
-    default:
-      chips.push({ label: 'No expiration', tone: 'info' })
-      break
-  }
-
-  if (token.type === 'invocation') {
-    const proofsCount = token.payload.proofs.length
-    chips.push({
-      label: proofsCount > 0 ? `${proofsCount} proof${proofsCount === 1 ? '' : 's'}` : 'No proofs',
-      tone: proofsCount > 0 ? 'info' : 'warn',
-      tooltip: proofsCount > 0 ? 'Delegations referenced by this invocation.' : 'This invocation does not reference any proofs.',
-    })
-  }
-
-  const signatureMeta = signatureStatusCopy[token.signature.status]
-  chips.push({
-    label: signatureMeta.label,
-    tone: signatureMeta.tone,
-    tooltip: token.signature.reason ?? signatureMeta.helper,
-  })
-  return chips
-})
-
-const policyJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type !== 'delegation')
-    return '[]'
-  return prettyJson(token.payload.pol ?? [])
-})
-
-const metaJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown' || !token.payload.meta)
-    return null
-  return prettyJson(token.payload.meta)
-})
-
-const argsJson = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type !== 'invocation')
-    return '{}'
-  return prettyJson(token.payload.args ?? {})
-})
-
-const proofsList = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type !== 'invocation')
-    return [] as string[]
-  return token.payload.proofs
-})
-
-const canExport = computed(() => !!report.value && hasTokens.value)
-
-const signatureSummary = computed(() => {
-  const token = selectedToken.value
-  if (!token || token.type === 'unknown')
-    return null
-
-  const base = signatureStatusCopy[token.signature.status]
-  return {
-    status: token.signature.status,
-    label: base.label,
-    tone: base.tone,
-    helper: base.helper,
-    reason: token.signature.reason ?? null,
-  }
-})
-
-watch(
-  () => props.defaultToken,
-  (value) => {
-    if (!value)
-      return
-    inputValue.value = value
-    if (props.autoParse)
-      scheduleParse('prop-change')
-  },
-)
-
-watch(detailTabs, (tabs) => {
-  if (!tabs.includes(activeTab.value))
-    activeTab.value = tabs[0] ?? 'summary'
-}, { immediate: true })
-
-watch(inputValue, (value) => {
-  if (suppressUrlSync) {
-    suppressUrlSync = false
-    return
-  }
-  if (props.persistUrl)
-    updateUrlState(value)
-  if (props.autoParse)
-    scheduleParse('input')
-})
-
-function scheduleParse(context: string) {
-  if (debounceHandle)
-    clearTimeout(debounceHandle)
-  debounceHandle = setTimeout(() => {
-    runAnalysis(context).catch((error) => {
-      console.error(error)
-    })
-  }, 420)
-}
-
-function pushDebug(stage: string, level: DebugEntry['level'], detail?: string) {
-  const entry: DebugEntry = {
-    id: Date.now() + Math.floor(Math.random() * 1000),
-    timestamp: new Date().toISOString(),
-    stage,
-    level,
-    detail,
-  }
-  debugEntries.value = [...debugEntries.value.slice(-49), entry]
-}
-
-async function runAnalysis(context: string) {
-  const raw = inputValue.value.trim()
-  const ticket = ++parseTicket
-
-  if (!raw) {
-    tokens.value = []
-    report.value = null
-    containerInfo.value = null
-    parseState.value = 'idle'
-    parseError.value = null
-    emit('analysis', createReport('raw', '', undefined, []))
-    emit('error', null)
-    return
-  }
-
-  parseState.value = 'parsing'
-  parseError.value = null
-  pushDebug('parse:start', 'info', `Context: ${context}`)
-
-  try {
-    let bytesList: Uint8Array[] = []
-    let container: ContainerParseResult | undefined
-    let source: 'container' | 'raw' = 'raw'
-    const issues: Issue[] = []
-
-    if (looksLikeContainerHeader(raw)) {
-      try {
-        container = parseUcanContainerText(raw)
-        bytesList = container.tokens
-        source = 'container'
-        containerInfo.value = container
-        pushDebug('parse:container', 'info', `Header 0x${container.header.raw.toString(16)}`)
-        for (const diagnostic of container.diagnostics) {
-          issues.push({ level: diagnostic.level, code: diagnostic.code, message: diagnostic.message })
-          pushDebug('parse:container-diagnostic', diagnostic.level === 'warn' ? 'error' : 'info', diagnostic.message)
-        }
-      }
-      catch (error) {
-        containerInfo.value = null
-        container = undefined
-        if (error instanceof ContainerParseError) {
-          issues.push({ level: 'warn', code: error.code, message: error.message })
-          pushDebug('parse:container-failed', 'error', `${error.message} (falling back to raw token parsing)`)
-        }
-        else {
-          throw error
-        }
-      }
-    }
-
-    if (!bytesList.length) {
-      containerInfo.value = null
-      const decoded = decodeInputToTokenBytes(raw)
-      bytesList = [decoded.bytes]
-      issues.push(...decoded.issues)
-    }
-
-    const analyses = await Promise.all(bytesList.map((bytes, index) => analyseBytes(bytes, index)))
-    if (ticket !== parseTicket)
-      return
-
-    tokens.value = analyses
-    for (const tokenAnalysis of analyses) {
-      if (tokenAnalysis.type === 'unknown')
-        continue
-      const signatureMeta = signatureStatusCopy[tokenAnalysis.signature.status]
-      const descriptor = tokenAnalysis.type === 'invocation' ? 'Invocation' : 'Delegation'
-      const details = [`${descriptor} #${tokenAnalysis.index + 1}: ${signatureMeta.label}`]
-      if (tokenAnalysis.signature.reason)
-        details.push(tokenAnalysis.signature.reason)
-      const level: DebugEntry['level'] = tokenAnalysis.signature.status === 'failed' ? 'error' : 'info'
-      pushDebug('signature:check', level, details.join(' · '))
-    }
-    selectedTokenIndex.value = 0
-    activeTab.value = 'summary'
-
-    const generatedReport = createReport(source, raw, container, analyses, issues)
-    report.value = generatedReport
-    parseState.value = 'ready'
-    emit('analysis', generatedReport)
-    emit('error', null)
-
-    pushDebug('parse:complete', 'info', `Tokens decoded: ${analyses.length}`)
-  }
-  catch (error) {
-    if (ticket !== parseTicket)
-      return
-    const message = error instanceof ContainerParseError ? error.message : (error as Error).message ?? 'Failed to parse token'
-    parseState.value = 'error'
-    parseError.value = message
-    pushDebug('parse:error', 'error', message)
-    emit('error', message)
-  }
-}
-
-function decodeInputToTokenBytes(raw: string): { bytes: Uint8Array, issues: Issue[] } {
-  const trimmed = raw.trim()
-  const issues: Issue[] = []
-  const decoders = [
-    () => decodeBase64(trimmed, 'standard'),
-    () => decodeBase64(trimmed, 'url'),
-  ] as const
-
-  for (const decode of decoders) {
-    try {
-      return { bytes: decode(), issues }
-    }
-    catch {
-      // try next decoder
-    }
-  }
-
-  issues.push({
-    level: 'notice',
-    code: 'raw_utf8_fallback',
-    message: 'Input is not valid base64/base64url; treating it as UTF-8 bytes.',
-  })
-  pushDebug('parse:raw-fallback', 'info', 'Decoding as UTF-8 bytes')
-  return { bytes: new TextEncoder().encode(trimmed), issues }
-}
-
-function updateUrlState(value: string) {
-  if (!isBrowser)
-    return
-  const url = new URL(window.location.href)
-  if (value.trim())
-    url.searchParams.set('ucan', encodeURIComponent(value.trim()))
-  else
-    url.searchParams.delete('ucan')
-  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
-}
-
-async function copyReport() {
-  const currentReport = report.value
-  if (!currentReport)
-    return
-  const serialized = stringifyReport(currentReport as any)
-  try {
-    if (navigator?.clipboard) {
-      await navigator.clipboard.writeText(serialized)
-    }
-    else {
-      const element = document.createElement('textarea')
-      element.value = serialized
-      document.body.appendChild(element)
-      element.select()
-      document.execCommand('copy')
-      document.body.removeChild(element)
-    }
-    pushDebug('export:copy', 'info', 'Report copied to clipboard')
-    emit('export', { kind: 'copy', report: currentReport as any })
-  }
-  catch (error) {
-    pushDebug('export:copy', 'error', (error as Error).message)
-  }
-}
-
-function downloadReport() {
-  const currentReport = report.value
-  if (!currentReport || !isBrowser)
-    return
-  const serialized = stringifyReport(currentReport as any)
-  const blob = new Blob([serialized], { type: 'application/json' })
-  const link = document.createElement('a')
-  link.href = URL.createObjectURL(blob)
-  link.download = `ucan-inspection-${Date.now()}.json`
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-  URL.revokeObjectURL(link.href)
-  pushDebug('export:download', 'info', 'Report downloaded')
-  emit('export', { kind: 'download', report: currentReport as any })
-}
-
-function clearInput() {
-  inputValue.value = ''
-  tokens.value = []
-  parseError.value = null
-  report.value = null
-  containerInfo.value = null
-  parseState.value = 'idle'
-  emit('analysis', createReport('raw', '', undefined, []))
-}
 
 async function inspectNow() {
   await runAnalysis('manual')
@@ -672,11 +167,11 @@ async function loadMockToken(kind: MockTokenKind) {
   mockLoadingKind.value = kind
   try {
     const tokens = await getMockTokens()
-    suppressUrlSync = true
+    urlSync.suppressOnce()
     inputValue.value = tokens[kind]
     pushDebug('mock:load', 'info', `Mock ${kind} token loaded`)
-    if (props.autoParse)
-      scheduleParse(`mock-${kind}`)
+    if (props.autoInspect)
+      debouncedAnalysis.schedule(`mock-${kind}`)
   }
   catch (error) {
     pushDebug('mock:error', 'error', (error as Error).message)
@@ -686,37 +181,9 @@ async function loadMockToken(kind: MockTokenKind) {
   }
 }
 
-function clearDebug() {
-  debugEntries.value = []
-}
-
-function toggleDebugMode() {
+function toggleDebugMode(): void {
   debugMode.value = !debugMode.value
 }
-
-onMounted(async () => {
-  if (!isBrowser)
-    return
-
-  const params = new URLSearchParams(window.location.search)
-  const encoded = params.get('ucan')
-  if (encoded) {
-    suppressUrlSync = true
-    try {
-      inputValue.value = decodeURIComponent(encoded)
-    }
-    catch {
-      inputValue.value = encoded
-    }
-    await nextTick()
-    if (props.autoParse) {
-      await runAnalysis('url-boot')
-    }
-  }
-  else if (props.defaultToken && props.autoParse) {
-    await runAnalysis('default-prop')
-  }
-})
 </script>
 
 <template>
@@ -742,92 +209,21 @@ onMounted(async () => {
     </header>
 
     <div class="grid gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
-      <section class="rounded-3xl border border-white/10 bg-slate-950/60 p-6 backdrop-blur">
-        <div>
-          <h2 class="text-xl font-semibold text-white">
-            UCAN Inspector <span class="mt-2 text-[11px] text-slate-400"> v{{ inspectorVersion }}</span>
-          </h2>
-          <p class="mt-1 text-sm text-slate-400">
-            Supports UCAN tokens and container formats defined in the
-            <a href="https://ucan.xyz/specification/" target="_blank" rel="noreferrer" class="underline">UCAN v1.0 specification</a>.
-          </p>
-        </div>
-
-        <textarea v-model="inputValue" class="mt-4 h-60 w-full resize-y rounded-2xl border border-white/10 bg-slate-900/80 p-4 font-mono text-sm text-slate-100 shadow-inner outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-400/40" placeholder="Paste a UCAN token or container here…" spellcheck="false" />
-
-        <p class="mt-2 text-xs text-slate-300">
-          {{
-            parseState === 'parsing'
-              ? 'Parsing token…'
-              : parseState === 'ready'
-                ? `Decoded ${tokenCount} token${tokenCount === 1 ? '' : 's'}.`
-                : parseState === 'idle'
-                  ? 'Waiting for input.'
-                  : 'An error occurred while parsing.'
-          }}
-        </p>
-
-        <div class="mt-4 flex flex-wrap items-center gap-2">
-          <button class="rounded-full border border-white/20 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/10" type="button" @click="inspectNow">
-            Inspect token
-          </button>
-          <button class="rounded-full border border-transparent bg-white/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-white transition hover:bg-white/20" type="button" @click="clearInput">
-            Clear
-          </button>
-          <button
-            class="rounded-full border px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition" :class="debugMode
-              ? 'border-indigo-400 bg-indigo-500/20 text-indigo-100 hover:border-indigo-300 hover:bg-indigo-500/30'
-              : 'border-white/10 bg-white/5 text-slate-200 hover:border-white/30 hover:bg-white/10'" type="button" :aria-pressed="debugMode" @click="toggleDebugMode"
-          >
-            Debug: {{ debugMode ? 'On' : 'Off' }}
-          </button>
-        </div>
-
-        <p v-if="parseState === 'error'" class="mt-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-          {{ parseError }}
-        </p>
-
-        <div v-if="parseState === 'ready' && reportIssues.length" class="mt-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-          <p class="font-semibold">
-            Notices & warnings
-          </p>
-          <ul class="mt-1 list-disc space-y-1 pl-5">
-            <li v-for="(issue, idx) in reportIssues" :key="`${issue.code}-${idx}`">
-              <span class="font-semibold">{{ issue.level }}</span>: {{ issue.message }}
-            </li>
-          </ul>
-        </div>
-
-        <div v-if="containerInfo" class="mt-4 grid gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-200">
-          <div class="flex items center justify-between">
-            <span class="text-slate-400">Header byte</span>
-            <span class="font-mono text-sm">0x{{ containerInfo.header.raw.toString(16).padStart(2, '0') }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Encoding</span>
-            <span class="font-semibold capitalize">{{ containerInfo.header.encoding }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Compression</span>
-            <span class="font-semibold capitalize">{{ containerInfo.header.compression }}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-400">Tokens detected</span>
-            <span class="font-semibold">{{ containerInfo.tokens.length }}</span>
-          </div>
-
-          <div v-if="containerInfo.diagnostics.length" class="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">
-            <p class="font-semibold">
-              Container diagnostics
-            </p>
-            <ul class="mt-1 list-disc space-y-1 pl-5">
-              <li v-for="(diag, idx) in containerInfo.diagnostics" :key="`${diag.code}-${idx}`">
-                <span class="font-semibold">{{ diag.level }}</span>: {{ diag.message }}
-              </li>
-            </ul>
-          </div>
-        </div>
-      </section>
+      <InspectorInputPanel
+        v-model="inputValue"
+        v-model:json-format="jsonFormat"
+        v-model:include-raw-bytes="includeRawBytes"
+        :inspector-version="inspectorVersion"
+        :parse-state="parseState"
+        :token-count="tokenCount"
+        :parse-error="parseError"
+        :report-issues="reportIssues"
+        :container-info="containerInfo"
+        :debug-mode="debugMode"
+        @inspect="inspectNow"
+        @clear="clearInput"
+        @toggle-debug="toggleDebugMode"
+      />
 
       <section class="rounded-3xl border border-white/10 bg-slate-950/70 p-6 backdrop-blur">
         <div v-if="!hasTokens" class="flex h-full flex-col items-center justify-center gap-3 text-center text-slate-400">
@@ -840,173 +236,40 @@ onMounted(async () => {
         </div>
 
         <div v-else class="space-y-6">
-          <div class="flex flex-wrap items-center gap-3">
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="token in tokens" :key="token.id" class="rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide" :class="[
-                  token.index === selectedTokenIndex ? 'border-indigo-400 bg-indigo-500/20 text-indigo-200' : 'border-white/10 bg-white/5 text-slate-300 hover:border-white/30 hover:text-white',
-                ]" type="button" @click="selectedTokenIndex = token.index"
-              >
-                Token {{ token.index + 1 }}
-              </button>
-            </div>
-
-            <div class="ml-auto flex flex-wrap gap-2">
-              <span
-                v-for="chip in statusChips" :key="chip.label" class="rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide" :class="{
-                  'bg-emerald-500/15 text-emerald-200': chip.tone === 'success',
-                  'bg-amber-500/15 text-amber-200': chip.tone === 'warn',
-                  'bg-rose-500/15 text-rose-200': chip.tone === 'error',
-                  'bg-white/10 text-slate-200': chip.tone === 'info',
-                }" :title="chip.tooltip ?? undefined"
-              >
-                {{ chip.label }}
-              </span>
-            </div>
-          </div>
+          <InspectorResultsHeader
+            :tokens="tokens"
+            :selected-token-index="selectedTokenIndex"
+            :status-chips="statusChips"
+            @select="(index) => selectedTokenIndex = index"
+          />
 
           <div v-if="selectedToken && selectedToken.type !== 'unknown'" class="space-y-6">
-            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <article v-for="card in summaryCards" :key="card.label" class="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <p class="text-xs uppercase tracking-wide text-slate-400">
-                  {{ card.label }}
-                </p>
-                <p class="mt-2 truncate text-sm font-semibold text-white" :title="card.value">
-                  {{ card.value }}
-                </p>
-                <p class="mt-1 text-xs text-slate-300">
-                  {{ card.helper }}
-                </p>
-              </article>
-            </div>
+            <TokenOverview
+              :summary-cards="summaryCards"
+              :timeline="timeline"
+              :timeline-state="timelineState"
+              :timeline-progress="timelineProgress"
+              :timeline-summary="timelineSummary"
+            />
 
-            <div v-if="timeline" class="rounded-2xl border border-white/10 bg-gradient-to-r from-slate-900/80 via-slate-900/60 to-slate-900/80 p-5">
-              <div class="flex flex-wrap items-baseline justify-between gap-2 text-xs text-slate-400">
-                <span>Not before: <span class="font-semibold text-slate-200">{{ timeline.nbfLabel }}</span></span>
-                <span>Expires: <span class="font-semibold text-slate-200">{{ timeline.expLabel }}</span></span>
-              </div>
-              <div class="mt-3 h-2 w-full rounded-full bg-slate-800/80">
-                <div class="h-full rounded-full bg-indigo-400/80 transition-all" :style="{ width: `${timelineProgress}%` }" />
-              </div>
-              <p v-if="timelineSummary" class="mt-2 text-sm text-slate-300">
-                Status: <span class="font-semibold text-white">{{ timelineSummary.statusLabel }}</span>
-                <template v-if="timelineSummary.expText">
-                  · {{ timelineSummary.expText }}
-                </template>
-                <template v-if="timelineSummary.nbfText">
-                  · {{ timelineSummary.nbfText }}
-                </template>
-              </p>
-            </div>
-
-            <div class="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-              <nav v-if="detailTabs.length" class="flex border-b border-white/5 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                <button v-for="tab in detailTabs" :key="tab" class="flex-1 px-3 py-2 capitalize" :class="tab === activeTab ? 'bg-white/10 text-white' : 'hover:bg-white/5'" type="button" @click="activeTab = tab">
-                  {{ tab }}
-                </button>
-              </nav>
-
-              <div class="max-h-[420px] overflow-auto p-4 text-sm">
-                <div v-if="activeTab === 'summary'" class="space-y-3 text-slate-200">
-                  <div v-if="signatureSummary" class="rounded-xl border border-white/5 bg-white/5 p-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                      Signature
-                    </p>
-                    <p
-                      class="mt-1 text-sm font-semibold" :class="{
-                        'text-emerald-200': signatureSummary.tone === 'success',
-                        'text-amber-200': signatureSummary.tone === 'warn',
-                        'text-rose-200': signatureSummary.tone === 'error',
-                        'text-slate-200': signatureSummary.tone === 'info',
-                      }"
-                    >
-                      {{ signatureSummary.label }}
-                    </p>
-                    <p class="mt-1 text-xs text-slate-300">
-                      {{ signatureSummary.reason ?? signatureSummary.helper }}
-                    </p>
-                  </div>
-                  <div class="flex items-start justify-between gap-4 rounded-xl border border-white/5 bg-white/5 p-3">
-                    <div>
-                      <p class="text-xs uppercase tracking-wide text-slate-400">
-                        Nonce
-                      </p>
-                      <p class="mt-1 font-mono text-xs">
-                        {{ selectedNonceDagJson }}
-                      </p>
-                    </div>
-                    <div class="text-right">
-                      <p class="text-xs uppercase tracking-wide text-slate-400">
-                        CID
-                      </p>
-                      <p class="mt-1 font-mono text-xs">
-                        {{ selectedToken.cid }}
-                      </p>
-                    </div>
-                  </div>
-                  <div v-if="selectedToken.type === 'delegation'" class="rounded-xl border border-white/5 bg-white/5 p-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                      Policy
-                    </p>
-                    <p class="mt-2 text-xs text-slate-300">
-                      {{ Array.isArray(selectedToken.payload.pol) ? selectedToken.payload.pol.length : 0 }} predicate{{ Array.isArray(selectedToken.payload.pol) && selectedToken.payload.pol.length === 1 ? '' : 's' }}
-                    </p>
-                    <p class="mt-1 text-xs text-slate-300">
-                      Policies constrain invocation arguments using the UCAN policy language.
-                    </p>
-                  </div>
-                  <div v-else class="rounded-xl border border-white/5 bg-white/5 p-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                      Proofs
-                    </p>
-                    <p class="mt-2 text-xs text-slate-300">
-                      {{ proofsList.length }} proof{{ proofsList.length === 1 ? '' : 's' }} referenced
-                    </p>
-                    <p class="mt-1 text-xs text-slate-300">
-                      Proofs reference delegations that authorize this invocation.
-                    </p>
-                  </div>
-                  <div v-if="selectedToken.type === 'invocation' && selectedToken.payload.cause" class="rounded-xl border border-white/5 bg-white/5 p-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                      Cause
-                    </p>
-                    <p class="mt-2 font-mono text-xs break-all text-slate-200">
-                      {{ selectedCauseDagJson }}
-                    </p>
-                    <p class="mt-1 text-xs text-slate-300">
-                      Receipt or task CID linked to this invocation.
-                    </p>
-                  </div>
-                  <div v-if="metaJson" class="rounded-xl border border-white/5 bg-white/5 p-3">
-                    <p class="text-xs uppercase tracking-wide text-slate-400">
-                      Meta
-                    </p>
-                    <pre class="mt-2 whitespace-pre-wrap break-words font-mono text-xs text-slate-200">{{ metaJson }}</pre>
-                  </div>
-                </div>
-
-                <pre v-else-if="activeTab === 'payload'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ selectedPayloadJson }}</pre>
-
-                <pre v-else-if="activeTab === 'policy' && selectedToken.type === 'delegation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ policyJson }}</pre>
-
-                <pre v-else-if="activeTab === 'args' && selectedToken.type === 'invocation'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ argsJson }}</pre>
-
-                <div v-else-if="activeTab === 'proofs' && selectedToken.type === 'invocation'" class="space-y-2 text-xs text-slate-200">
-                  <p v-if="proofsList.length === 0" class="text-slate-300">
-                    No proofs attached to this invocation.
-                  </p>
-                  <ol v-else class="space-y-2">
-                    <li v-for="(proof, proofIndex) in proofsList" :key="proof" class="rounded-lg border border-white/5 bg-slate-900/60 p-2 font-mono text-[11px]">
-                      Proof {{ proofIndex + 1 }}: {{ proof }}
-                    </li>
-                  </ol>
-                </div>
-
-                <pre v-else-if="activeTab === 'header'" class="whitespace-pre-wrap break-words font-mono text-xs text-slate-100">{{ selectedHeaderJson }}</pre>
-
-                <pre v-else class="whitespace-pre-wrap break-all font-mono text-xs text-slate-100">{{ selectedToken.tokenBase64 }}</pre>
-              </div>
-            </div>
+            <TokenDetailsTabs
+              v-model:active-tab="activeTab"
+              :detail-tabs="detailTabs"
+              :selected-token-type="selectedTokenType"
+              :selected-token-cid="selectedTokenCid"
+              :selected-token-token-base64="selectedTokenTokenBase64"
+              :delegation-policy-predicate-count="delegationPolicyPredicateCount"
+              :invocation-has-cause="invocationHasCause"
+              :signature-summary="signatureSummary"
+              :selected-nonce-dag-json="selectedNonceDagJson"
+              :selected-cause-dag-json="selectedCauseDagJson"
+              :meta-json="metaJson"
+              :selected-payload-json="selectedPayloadJson"
+              :policy-json="policyJson"
+              :args-json="argsJson"
+              :proofs-list="proofsList"
+              :selected-header-json="selectedHeaderJson"
+            />
           </div>
 
           <div v-else-if="selectedToken && selectedToken.type === 'unknown'" class="rounded-2xl border border-white/10 bg-white/5 p-5 text-slate-200">
@@ -1028,157 +291,19 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Delegation chain
-            </h3>
-            <ol class="mt-3 space-y-3">
-              <li v-for="link in delegationLinks" :key="link.id" class="rounded-xl border border-white/5 bg-slate-900/70 p-3 text-xs text-slate-300">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span class="rounded-full bg-indigo-500/20 px-2 py-0.5 font-semibold text-indigo-200">#{{ link.index + 1 }}</span>
-                  <span class="font-semibold text-slate-100">{{ link.iss }}</span>
-                  <span class="text-slate-300">→</span>
-                  <span class="font-semibold text-slate-100">{{ link.aud }}</span>
-                </div>
-                <p class="mt-1 font-mono text-[11px] text-slate-400">
-                  CID: {{ link.cid }}
-                </p>
-              </li>
-            </ol>
-            <p v-if="delegationLinks.length === 0" class="text-xs text-slate-300">
-              No valid delegations detected.
-            </p>
-          </div>
+          <DelegationChainList :delegation-links="delegationLinks" />
 
-          <div class="flex flex-wrap items-center gap-3">
-            <button class="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:border-white/40 hover:bg-white/20 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-300" type="button" :disabled="!canExport" @click="copyReport">
-              Copy JSON report
-            </button>
-            <button class="rounded-full border border-indigo-400/40 bg-indigo-500/20 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-indigo-100 transition hover:border-indigo-300/80 hover:bg-indigo-400/30 disabled:cursor-not-allowed disabled:border-white/10 disabled:text-slate-300" type="button" :disabled="!canExport" @click="downloadReport">
-              Download report
-            </button>
-          </div>
+          <ReportExportControls :disabled="!canExport" @copy="copyReport" @download="downloadReport" />
         </div>
       </section>
     </div>
 
-    <transition name="fade">
-      <aside v-if="debugMode" class="mt-6 space-y-4 rounded-3xl border border-white/10 bg-slate-950/85 p-6">
-        <header>
-          <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-300">
-            Debug mode
-          </h3>
-          <p class="mt-2 text-xs text-slate-400">
-            Access mock UCANs and review structured logs while debugging.
-          </p>
-        </header>
-
-        <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_240px]">
-          <section class="rounded-2xl border border-white/10 bg-slate-900/50 p-4 text-sm text-slate-200">
-            <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">
-              Sample tokens
-            </p>
-            <p class="mt-1 text-[11px] text-slate-400">
-              Quickly inject valid and intentionally malformed examples.
-            </p>
-            <div class="mt-3 space-y-4">
-              <div>
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Valid
-                </p>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'delegation'" @click="loadMockToken('delegation')">
-                    {{ mockLoadingKind === 'delegation' ? 'Loading delegation…' : 'Delegation' }}
-                  </button>
-                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'invocation'" @click="loadMockToken('invocation')">
-                    {{ mockLoadingKind === 'invocation' ? 'Loading invocation…' : 'Invocation' }}
-                  </button>
-                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'container'" @click="loadMockToken('container')">
-                    {{ mockLoadingKind === 'container' ? 'Loading container…' : 'Container' }}
-                  </button>
-
-                  <button class="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'containerBase64url'" @click="loadMockToken('containerBase64url')">
-                    {{ mockLoadingKind === 'containerBase64url' ? 'Loading…' : 'Container (base64url)' }}
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                  Malformed
-                </p>
-                <div class="mt-2 flex flex-wrap gap-2">
-                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'nonCanonicalContainer'" @click="loadMockToken('nonCanonicalContainer')">
-                    {{ mockLoadingKind === 'nonCanonicalContainer' ? 'Loading…' : 'Non-canonical container' }}
-                  </button>
-
-                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'tamperedDelegation'" @click="loadMockToken('tamperedDelegation')">
-                    {{ mockLoadingKind === 'tamperedDelegation' ? 'Loading…' : 'Tampered delegation' }}
-                  </button>
-
-                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badContainer'" @click="loadMockToken('badContainer')">
-                    {{ mockLoadingKind === 'badContainer' ? 'Loading…' : 'Invalid container' }}
-                  </button>
-
-                  <button class="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-xs font-medium uppercase tracking-wide text-amber-100 transition hover:border-amber-500/30 hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-60" type="button" :disabled="mockLoadingKind === 'badRawInput'" @click="loadMockToken('badRawInput')">
-                    {{ mockLoadingKind === 'badRawInput' ? 'Loading…' : 'Invalid raw input' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="flex flex-col justify-between rounded-2xl border border-white/10 bg-slate-900/50 p-4 text-sm text-slate-200">
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                Log status
-              </p>
-              <p class="mt-1 text-[11px] text-slate-400">
-                Entries append in real time when operations run.
-              </p>
-            </div>
-            <div class="mt-3 inline-flex items-center gap-2 rounded-full border border-indigo-400/60 bg-indigo-500/10 px-3 py-1.5 text-[11px] uppercase tracking-wide text-indigo-100">
-              <span>Status</span>
-              <span class="font-semibold">Active</span>
-            </div>
-            <button class="mt-3 self-start rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200 transition hover:border-white/30 hover:bg-white/10" type="button" @click="clearDebug">
-              Clear log
-            </button>
-          </section>
-        </div>
-
-        <div class="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
-          <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-300">
-            Log entries
-          </h4>
-          <ul class="mt-3 max-h-64 space-y-2 overflow-auto pr-2 text-xs">
-            <li v-for="entry in [...debugEntries].reverse()" :key="entry.id" class="rounded-xl border border-white/5 p-3" :class="entry.level === 'error' ? 'bg-rose-500/10 text-rose-200' : 'bg-white/5 text-slate-200'">
-              <div class="flex items-center justify-between">
-                <span class="font-semibold">{{ entry.stage }}</span>
-                <span class="text-[10px] uppercase tracking-wide text-slate-400">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
-              </div>
-              <p class="mt-1 whitespace-pre-wrap break-words text-[11px]">
-                {{ entry.detail }}
-              </p>
-            </li>
-            <li v-if="debugEntries.length === 0" class="rounded-xl border border-dashed border-white/10 bg-white/5 p-3 text-xs text-slate-400">
-              No entries yet. Run an inspection or load a sample token to see activity.
-            </li>
-          </ul>
-        </div>
-      </aside>
-    </transition>
+    <InspectorDebugPanel
+      :open="debugMode"
+      :debug-entries="reversedDebugEntries"
+      :mock-loading-kind="mockLoadingKind"
+      @load-mock="loadMockToken"
+      @clear-log="clearDebug"
+    />
   </div>
 </template>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style>

@@ -2,9 +2,9 @@ import { encode as encodeCbor } from 'cborg'
 import { gzip } from 'pako'
 import { describe, expect, it } from 'vitest'
 
-import { decodeBase64, encodeBase64 } from '../../src/utils/base64'
-import { getMockTokens } from '../../src/utils/mockData'
-import { looksLikeContainerHeader, parseUcanContainerText } from '../../src/utils/ucanContainer'
+import { decodeBase64, encodeBase64 } from '@/utils/base64'
+import { getMockTokens } from '@/utils/mockData'
+import { looksLikeContainerHeader, parseUcanContainerText } from '@/utils/ucanContainer'
 
 import { createSampleDelegation } from './utils'
 

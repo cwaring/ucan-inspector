@@ -1,4 +1,5 @@
 import { encode as encodeCbor } from 'cborg'
+
 import { defaultResolver as didDefaultResolver } from 'iso-did'
 import { EdDSASigner } from 'iso-signatures/signers/eddsa.js'
 import { verifier as ecdsaVerifier } from 'iso-signatures/verifiers/ecdsa.js'
@@ -9,7 +10,8 @@ import { verifier as rsaVerifier } from 'iso-signatures/verifiers/rsa.js'
 import { Delegation } from 'iso-ucan/delegation'
 import { Invocation } from 'iso-ucan/invocation'
 
-import { encodeBase64 } from './base64'
+import { encodeBase64 } from '@/utils/base64'
+import { nowUnixSeconds } from '@/utils/time'
 
 function compareBytes(left: Uint8Array, right: Uint8Array): number {
   const minLength = Math.min(left.length, right.length)
@@ -44,6 +46,7 @@ export interface MockTokens {
   tamperedDelegation: string
 }
 
+/** Union of supported mock token keys. */
 export type MockTokenKind = keyof MockTokens
 
 interface MockTokenCacheEntry {
@@ -60,7 +63,7 @@ async function buildMockTokens(): Promise<MockTokens> {
   const invokerSigner = await EdDSASigner.generate()
   const serviceSigner = await EdDSASigner.generate()
 
-  const now = Math.floor(Date.now() / 1000)
+  const now = nowUnixSeconds()
 
   const delegation = await Delegation.create({
     iss: rootSigner,
@@ -152,10 +155,27 @@ async function ensureMockTokens(): Promise<MockTokens> {
   return cachedTokens.promise
 }
 
+/**
+ * Retrieve the full set of mock tokens.
+ *
+ * @returns Mock tokens keyed by {@link MockTokenKind}.
+ *
+ * @remarks
+ * Tokens are cached and periodically refreshed.
+ */
 export async function getMockTokens(): Promise<MockTokens> {
   return ensureMockTokens()
 }
 
+/**
+ * Retrieve one mock token by kind.
+ *
+ * @param kind - Which mock token to return.
+ * @returns The requested mock token.
+ *
+ * @remarks
+ * Used for demos, playgrounds, and manual UI testing.
+ */
 export async function getMockToken<T extends MockTokenKind>(kind: T): Promise<MockTokens[T]> {
   const tokens = await ensureMockTokens()
   return tokens[kind]

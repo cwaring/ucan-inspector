@@ -2,12 +2,32 @@ import { encode as encodeEnvelope, getSignaturePayload } from 'iso-ucan/envelope
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBase64 } from '../../src/utils/base64'
-import { getMockTokens } from '../../src/utils/mockData'
-import { analyseBytes } from '../../src/utils/ucanAnalysis'
+import { decodeBase64, encodeBase64 } from '@/utils/base64'
+import { getMockTokens } from '@/utils/mockData'
+import { analyseBytes, buildTokenExportModel, createReport, stringifyExportValue, stringifyReport, stringifyReportWithFormat } from '@/utils/ucanAnalysis'
 import { createSampleDelegation } from './utils'
 
 describe('ucan analysis', () => {
+  it('applies delegation payload key order deterministically', () => {
+    const payload = {
+      aud: 'did:example:aud',
+      cmd: '/example/read',
+      exp: 123,
+      iss: 'did:example:iss',
+      nonce: 'AAEC',
+      pol: [],
+      sub: 'did:example:sub',
+    }
+
+    const direct = stringifyExportValue(payload, 'json')
+    const keys = direct
+      .split('\n')
+      .map(line => line.match(/^\s+"([^"]+)":/))
+      .filter(Boolean)
+      .map(match => match![1])
+
+    expect(keys).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
+  })
   it('decodes a delegation token', async () => {
     const sample = await createSampleDelegation()
     const analysed = await analyseBytes(sample.delegation.bytes, 0)
@@ -89,5 +109,55 @@ describe('ucan analysis', () => {
     expect(analysed.signature.reason).toBeTruthy()
     expect(analysed.issues.length).toBeGreaterThan(0)
     expect(analysed.issues.some(issue => issue.code === 'signature_invalid')).toBe(true)
+  })
+
+  it('omits raw byte arrays in default report JSON export', async () => {
+    const sample = await createSampleDelegation()
+    const analysed = await analyseBytes(sample.delegation.bytes, 0)
+
+    const report = createReport('raw', sample.delegation.toString(), undefined, [analysed], [])
+    const serialized = stringifyReport(report)
+
+    expect(serialized).not.toContain('"bytes"')
+    expect(serialized).not.toContain('"payloadBytes"')
+    expect(serialized).not.toContain('"cbor"')
+
+    // The analyzed token list should be present in default exports.
+    expect(serialized).toContain('"tokens"')
+
+    const dagJson = stringifyReportWithFormat(report, { format: 'dag-json' })
+    expect(dagJson).not.toContain('"payloadBytes"')
+    expect(dagJson).not.toContain('"cbor"')
+    expect(dagJson).toContain('"tokens"')
+
+    if (analysed.type === 'unknown')
+      throw new Error('expected delegation analysis')
+
+    const expectedDagJsonNonce = encodeBase64(decodeBase64(analysed.payload.nonce, 'standard'), 'standard').replace(/=+$/, '')
+    expect(dagJson).toMatch(/"nonce"\s*:\s*\{/)
+    expect(dagJson).toContain(`"bytes": "${expectedDagJsonNonce}"`)
+
+    // Still allows explicit raw-bytes export when requested.
+    const withBytes = stringifyReportWithFormat(report, { format: 'json', includeRawBytes: true })
+    expect(withBytes).toContain('"bytes"')
+  })
+
+  it('serializes delegation payload fields in spec order', async () => {
+    const sample = await createSampleDelegation()
+    const analysed = await analyseBytes(sample.delegation.bytes, 0)
+    if (analysed.type !== 'delegation')
+      throw new Error('expected delegation analysis')
+
+    const exportToken = buildTokenExportModel(analysed, { includeRawBytes: false })
+    const payload = (exportToken as any)?.json?.envelope?.payload
+    expect(payload).toBeTruthy()
+
+    const extractKeys = (serialized: string): string[] => {
+      return Object.keys(JSON.parse(serialized) as Record<string, unknown>)
+    }
+
+    // Sample delegations omit optional `meta` and `nbf`.
+    expect(extractKeys(stringifyExportValue(payload, 'json'))).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
+    expect(extractKeys(stringifyExportValue(payload, 'dag-json'))).toEqual(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp'])
   })
 })

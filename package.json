@@ -2,7 +2,7 @@
   "name": "@ucan-wg/inspector",
   "type": "module",
   "version": "0.0.0",
-  "packageManager": "pnpm@10.26.2",
+  "packageManager": "pnpm@10.27.0",
   "description": "UCAN Inspector, a webcomponent for inspecting UCAN tokens and containers",
   "author": "@cwaring",
   "license": "MIT",
@@ -33,6 +33,7 @@
   "dependencies": {
     "@ipld/dag-json": "catalog:prod",
     "cborg": "catalog:prod",
+    "date-fns": "catalog:prod",
     "iso-base": "catalog:prod",
     "iso-did": "catalog:prod",
     "iso-signatures": "catalog:prod",

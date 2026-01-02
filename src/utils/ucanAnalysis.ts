@@ -1,18 +1,30 @@
 import type { DecodedEnvelope, InvocationPayload } from 'iso-ucan/types'
 
-import type { SignatureVerificationResult } from './signatureVerification'
-import type { ContainerParseResult } from './ucanContainer'
+import type { SignatureVerificationResult } from '@/utils/signatureVerification'
+import type { ContainerParseResult } from '@/utils/ucanContainer'
+
 import { decode as decodeEnvelope } from 'iso-ucan/envelope'
 import { cid as computeCid } from 'iso-ucan/utils'
 
-import { encodeBase64 } from './base64'
-import { formatTimestamp, prettyJson, relativeTime } from './format'
-import { verifyDelegationSignature, verifyInvocationSignature } from './signatureVerification'
+import { CID } from 'multiformats/cid'
 
+import { decodeBase64, encodeBase64 } from '@/utils/base64'
+import { formatTimestamp, relativeTime, toPrettyDagJsonStringWithPostProcess } from '@/utils/format'
+import { verifyDelegationSignature, verifyInvocationSignature } from '@/utils/signatureVerification'
+import { nowUnixSeconds } from '@/utils/time'
+
+/** High-level token classification used by the inspector UI. */
 export type TokenKind = 'delegation' | 'invocation' | 'unknown'
 
+/** Severity level for analysis issues. */
 export type IssueLevel = 'notice' | 'warn' | 'error'
 
+/**
+ * An issue discovered during decoding / analysis.
+ *
+ * @remarks
+ * Issues are intended for UI presentation and diagnostics.
+ */
 export interface Issue {
   level: IssueLevel
   code: string
@@ -31,6 +43,7 @@ interface DelegationPayload {
   meta?: Record<string, unknown>
 }
 
+/** JSON view of a delegation token suitable for export. */
 export interface DelegationJSON {
   token: string
   cid: string
@@ -54,6 +67,7 @@ export interface DelegationJSON {
   }
 }
 
+/** JSON view of an invocation token suitable for export. */
 export interface InvocationJSON {
   cid: string
   envelope: {
@@ -70,13 +84,26 @@ export interface InvocationJSON {
   }
 }
 
+/**
+ * Signature verification status.
+ *
+ * @remarks
+ * Includes `skipped` for cases where verification isn't attempted.
+ */
 export type SignatureStatus = SignatureVerificationResult['status'] | 'skipped'
 
+/** Signature verification insight attached to a token analysis. */
 export interface SignatureInsight {
   status: SignatureStatus
   reason?: string
 }
 
+/**
+ * Token freshness timeline derived from exp/nbf.
+ *
+ * @remarks
+ * Used for overview UI and status chips.
+ */
 export interface TokenTimeline {
   expLabel: string
   expRelative: string
@@ -85,6 +112,7 @@ export interface TokenTimeline {
   state: 'valid' | 'expired' | 'pending' | 'none'
 }
 
+/** Minimal, UI-friendly view of a delegation payload. */
 export interface DelegationSummary {
   iss: string
   aud: string
@@ -97,6 +125,7 @@ export interface DelegationSummary {
   nonce: string
 }
 
+/** Minimal, UI-friendly view of an invocation payload. */
 export interface InvocationSummary {
   iss: string
   aud?: string
@@ -112,6 +141,12 @@ export interface InvocationSummary {
   nonce: string
 }
 
+/**
+ * Fully decoded delegation token view.
+ *
+ * @remarks
+ * Includes both a presentation-friendly payload and an export-friendly `json` shape.
+ */
 export interface DelegationView {
   type: 'delegation'
   tokenBase64: string
@@ -127,6 +162,12 @@ export interface DelegationView {
   json: DelegationJSON
 }
 
+/**
+ * Fully decoded invocation token view.
+ *
+ * @remarks
+ * Includes both a presentation-friendly payload and an export-friendly `json` shape.
+ */
 export interface InvocationView {
   type: 'invocation'
   tokenBase64: string
@@ -142,6 +183,9 @@ export interface InvocationView {
   json: InvocationJSON
 }
 
+/**
+ * Fallback view for inputs that cannot be decoded as a supported UCAN envelope.
+ */
 export interface UnknownTokenView {
   type: 'unknown'
   reason: string
@@ -156,8 +200,20 @@ interface TokenAnalysisMeta {
   signature: SignatureInsight
 }
 
+/**
+ * Union of all token analysis variants returned by {@link analyseBytes}.
+ *
+ * @remarks
+ * Every variant includes shared metadata like `id`, `index`, `bytes`, `issues`, and `signature`.
+ */
 export type TokenAnalysis = (DelegationView | InvocationView | UnknownTokenView) & TokenAnalysisMeta
 
+/**
+ * Full analysis output for an inspection run.
+ *
+ * @remarks
+ * This is the primary payload emitted by the inspector and exported as JSON.
+ */
 export interface AnalysisReport {
   source: 'container' | 'raw'
   rawInput: string
@@ -167,6 +223,13 @@ export interface AnalysisReport {
   createdAt: string
 }
 
+/**
+ * Analyse a single UCAN token represented as bytes.
+ *
+ * @param bytes - Token bytes.
+ * @param index - Token index within the input.
+ * @returns Token analysis view.
+ */
 export async function analyseBytes(bytes: Uint8Array, index: number): Promise<TokenAnalysis> {
   const base64 = encodeBase64(bytes)
   const id = `token-${index}`
@@ -190,10 +253,26 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
   }
 
   const { envelope } = envelopeResult
-  if (envelope.spec === 'dlg')
-    return await analyseDelegationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
-  if (envelope.spec === 'inv')
-    return await analyseInvocationEnvelope({ envelope, bytes, base64, id, index, initialIssues: envelopeResult.issues })
+  if (envelope.spec === 'dlg') {
+    return await analyseDelegationEnvelope({
+      envelope: envelope as DecodedEnvelope<'dlg'>,
+      bytes,
+      base64,
+      id,
+      index,
+      initialIssues: envelopeResult.issues,
+    })
+  }
+  if (envelope.spec === 'inv') {
+    return await analyseInvocationEnvelope({
+      envelope: envelope as DecodedEnvelope<'inv'>,
+      bytes,
+      base64,
+      id,
+      index,
+      initialIssues: envelopeResult.issues,
+    })
+  }
 
   const reason = `Unsupported payload spec: ${envelope.spec}`
   return {
@@ -214,6 +293,16 @@ export async function analyseBytes(bytes: Uint8Array, index: number): Promise<To
   }
 }
 
+/**
+ * Create an {@link AnalysisReport} for a set of analyzed tokens.
+ *
+ * @param source - Whether input was parsed as a container or a single raw token.
+ * @param rawInput - Raw user input.
+ * @param container - Container details when `source === 'container'`.
+ * @param tokens - Analysed tokens.
+ * @param issues - Report-level issues.
+ * @returns New report.
+ */
 export function createReport(
   source: 'container' | 'raw',
   rawInput: string,
@@ -231,8 +320,335 @@ export function createReport(
   }
 }
 
+/**
+ * Serialize an {@link AnalysisReport} as formatted JSON.
+ *
+ * @param report - Report to serialize.
+ * @returns JSON string.
+ */
 export function stringifyReport(report: AnalysisReport): string {
-  return prettyJson(report)
+  return stringifyReportWithFormat(report)
+}
+
+/** Supported report serialization formats. */
+export type ReportStringifyFormat = 'dag-json' | 'json'
+
+/** Options for {@link stringifyReportWithFormat}. */
+export interface StringifyReportOptions {
+  /** Output format. Defaults to `json`. */
+  format?: ReportStringifyFormat
+  /**
+   * Include raw byte arrays / CBOR blobs in JSON output.
+   *
+   * @remarks
+   * The report already includes shareable string forms like `tokenBase64` and CID strings.
+   * Raw bytes are redundant for most use-cases and are intentionally omitted by default.
+   */
+  includeRawBytes?: boolean
+}
+
+/**
+ * Serialize an {@link AnalysisReport} in the requested format.
+ *
+ * @param report - Report to serialize.
+ * @param options - Serialization options.
+ * @param options.format - Output format (defaults to `json`).
+ * @returns Formatted string suitable for copy/download.
+ */
+export function stringifyReportWithFormat(report: AnalysisReport, options: StringifyReportOptions = {}): string {
+  const format = options.format ?? 'json'
+
+  const exportValue = buildReportExportModel(report, { includeRawBytes: options.includeRawBytes ?? false })
+  return stringifyExportValue(exportValue, format)
+}
+
+/**
+ * Serialize an export model value in the requested format.
+ *
+ * @param value - Export model value.
+ * @param format - Output format.
+ * @returns Formatted string suitable for copy/download.
+ */
+export function stringifyExportValue(value: unknown, format: ReportStringifyFormat): string {
+  const prepared = prepareExportValueForSerialization(value, format)
+  return format === 'dag-json'
+    ? toPrettyDagJsonStringWithPostProcess(prepared, applyPreferredKeyOrderDeep)
+    : JSON.stringify(prepared, reportJsonReplacer, 2)
+}
+
+function prepareExportValueForSerialization(value: unknown, format: ReportStringifyFormat): unknown {
+  return normalizeForExportSerialization(value, {
+    omitUndefinedProperties: true,
+    cidSerialization: format === 'json' ? 'string' : 'keep',
+  })
+}
+
+type CidSerialization = 'keep' | 'string'
+
+function applyPreferredKeyOrderDeep(value: unknown): unknown {
+  return normalizeForExportSerialization(value, { omitUndefinedProperties: false, cidSerialization: 'keep' })
+}
+
+function normalizeForExportSerialization(
+  value: unknown,
+  options: {
+    omitUndefinedProperties: boolean
+    cidSerialization: CidSerialization
+  },
+): unknown {
+  if (value == null)
+    return value
+
+  if (value instanceof Uint8Array)
+    return value
+
+  if (value instanceof CID)
+    return options.cidSerialization === 'string' ? value.toString() : value
+
+  if (Array.isArray(value))
+    return value.map(inner => normalizeForExportSerialization(inner, options))
+
+  if (typeof value !== 'object')
+    return value
+
+  const record = value as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+
+  const keys = getPreferredKeyOrder(record)
+  for (const key of keys) {
+    const inner = record[key]
+    if (options.omitUndefinedProperties && inner === undefined)
+      continue
+    result[key] = normalizeForExportSerialization(inner, options)
+  }
+
+  return result
+}
+
+const delegationPayloadKeyOrder = [
+  'iss',
+  'aud',
+  'sub',
+  'cmd',
+  'pol',
+  'nonce',
+  'meta',
+  'nbf',
+  'exp',
+] as const satisfies ReadonlyArray<keyof DelegationJSON['envelope']['payload']>
+
+const invocationPayloadKeyOrder = [
+  'iss',
+  'sub',
+  'aud',
+  'cmd',
+  'args',
+  'prf',
+  'meta',
+  'nonce',
+  'exp',
+  'iat',
+  'cause',
+] as const satisfies ReadonlyArray<keyof InvocationJSON['envelope']['payload']>
+
+const invocationSummaryKeyOrder = [
+  'iss',
+  'sub',
+  'aud',
+  'cmd',
+  'args',
+  'proofs',
+  'meta',
+  'nonce',
+  'nbf',
+  'exp',
+  'iat',
+  'cause',
+] as const satisfies ReadonlyArray<keyof InvocationSummary>
+
+function getPreferredKeyOrder(record: Record<string, unknown>): string[] {
+  const specOrder = getSpecKeyOrder(record)
+  if (!specOrder)
+    return Object.keys(record).sort((a, b) => a.localeCompare(b))
+
+  const ordered: string[] = []
+  const present = new Set(Object.keys(record))
+
+  for (const key of specOrder) {
+    if (present.has(key)) {
+      ordered.push(key)
+      present.delete(key)
+    }
+  }
+
+  if (present.size > 0) {
+    const remaining = Array.from(present).sort((a, b) => a.localeCompare(b))
+    ordered.push(...remaining)
+  }
+
+  return ordered
+}
+
+function getSpecKeyOrder(record: Record<string, unknown>): readonly string[] | null {
+  const hasKeys = (keys: readonly string[]): boolean => keys.every(key => key in record)
+
+  // Delegation payload (both summary + export JSON share these keys).
+  if (hasKeys(['iss', 'aud', 'sub', 'cmd', 'pol', 'nonce', 'exp']))
+    return delegationPayloadKeyOrder
+
+  // Invocation payload (export JSON form uses `prf`).
+  if (hasKeys(['iss', 'sub', 'cmd', 'args', 'prf', 'nonce', 'exp']))
+    return invocationPayloadKeyOrder
+
+  // Invocation summary form (UI-friendly uses `proofs`).
+  if (hasKeys(['iss', 'sub', 'cmd', 'args', 'proofs', 'nonce', 'exp']))
+    return invocationSummaryKeyOrder
+
+  return null
+}
+
+function decodeStandardBase64ToBytesOrNull(value: string): Uint8Array | null {
+  try {
+    return decodeBase64(value, 'standard')
+  }
+  catch {
+    return null
+  }
+}
+
+function safeCidParse(value: string): CID | string {
+  try {
+    return CID.parse(value)
+  }
+  catch {
+    return value
+  }
+}
+
+function safeCidParseAll(values: string[]): Array<CID | string> {
+  return values.map(safeCidParse)
+}
+
+/**
+ * Build a token export model.
+ *
+ * @param token - Token analysis.
+ * @param options - Export options.
+ * @param options.includeRawBytes - Whether to include raw bytes/CBOR blobs.
+ * @returns A format-agnostic export model.
+ *
+ * @remarks
+ * The returned model is format-agnostic:
+ * - bytes are represented as `Uint8Array` (JSON serializer turns them into base64; DAG-JSON renders IPLD bytes)
+ * - CIDs are represented as `CID` where parseable (JSON serializer turns them into strings; DAG-JSON renders IPLD links)
+ */
+export function buildTokenExportModel(token: TokenAnalysis, options: { includeRawBytes: boolean }): Record<string, unknown> {
+  const includeRawBytes = options.includeRawBytes
+
+  const base: Record<string, unknown> = {
+    id: token.id,
+    index: token.index,
+    type: token.type,
+    tokenBase64: token.tokenBase64,
+    issues: token.issues,
+    signature: token.signature,
+    ...(includeRawBytes ? { bytes: token.bytes } : {}),
+  }
+
+  if (token.type === 'unknown') {
+    return {
+      ...base,
+      reason: token.reason,
+    }
+  }
+
+  const payloadNonceBytes = decodeStandardBase64ToBytesOrNull(token.payload.nonce)
+  const payload: Record<string, unknown> = {
+    ...token.payload,
+    ...(payloadNonceBytes ? { nonce: payloadNonceBytes } : {}),
+  }
+
+  if (token.type === 'invocation') {
+    payload.proofs = safeCidParseAll(token.payload.proofs)
+    payload.cause = token.payload.cause ? safeCidParse(token.payload.cause) : undefined
+  }
+
+  const jsonPayloadNonceBytes = decodeStandardBase64ToBytesOrNull(token.json.envelope.payload.nonce)
+  const jsonSignatureBytes = decodeStandardBase64ToBytesOrNull(token.json.envelope.signature)
+
+  const jsonEnvelopePayload: Record<string, unknown> = {
+    ...token.json.envelope.payload,
+    ...(jsonPayloadNonceBytes ? { nonce: jsonPayloadNonceBytes } : {}),
+  }
+
+  if (token.type === 'invocation') {
+    const prf = (token.json.envelope.payload as InvocationJSON['envelope']['payload']).prf
+    jsonEnvelopePayload.prf = safeCidParseAll(prf)
+
+    const cause = (token.json.envelope.payload as InvocationJSON['envelope']['payload']).cause
+    jsonEnvelopePayload.cause = cause ? safeCidParse(cause) : undefined
+  }
+
+  const jsonEnvelope: Record<string, unknown> = {
+    ...token.json.envelope,
+    payload: jsonEnvelopePayload,
+    ...(jsonSignatureBytes ? { signature: jsonSignatureBytes } : {}),
+  }
+
+  return {
+    ...base,
+    cid: safeCidParse(token.cid),
+    header: token.header,
+    payload,
+    timeline: token.timeline,
+    json: {
+      ...token.json,
+      cid: safeCidParse(token.json.cid),
+      envelope: jsonEnvelope,
+    },
+  }
+}
+
+function buildReportExportModel(report: AnalysisReport, options: { includeRawBytes: boolean }): unknown {
+  const includeRawBytes = options.includeRawBytes
+
+  const container = report.container
+    ? {
+        header: report.container.header,
+        diagnostics: report.container.diagnostics,
+        ...(includeRawBytes
+          ? {
+              payloadBytes: report.container.payloadBytes,
+              cbor: report.container.cbor,
+              tokens: report.container.tokens,
+            }
+          : {}),
+      }
+    : undefined
+
+  const tokens = report.tokens.map(token => buildTokenExportModel(token, { includeRawBytes }))
+
+  const exportReport: Record<string, unknown> = {
+    source: report.source,
+    rawInput: report.rawInput,
+    tokens,
+    issues: report.issues,
+    createdAt: report.createdAt,
+  }
+
+  if (container)
+    exportReport.container = container
+
+  return exportReport
+}
+
+function reportJsonReplacer(key: string, value: unknown): unknown {
+  // Prevent Uint8Array values from exploding into numeric-key objects.
+  // If new binary fields are added in the future, they should be explicitly mapped.
+  if (value instanceof Uint8Array)
+    return encodeBase64(value)
+
+  return value
 }
 
 async function analyseDelegationEnvelope({
@@ -404,10 +820,10 @@ async function analyseInvocationEnvelope({
 }
 
 function decodeEnvelopeSafe(bytes: Uint8Array):
-  | { ok: true, envelope: DecodedEnvelope<any>, issues: Issue[] }
+  | { ok: true, envelope: DecodedEnvelope<'dlg' | 'inv'>, issues: Issue[] }
   | { ok: false, issues: Issue[] } {
   try {
-    const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<any>
+    const envelope = decodeEnvelope({ envelope: bytes }) as DecodedEnvelope<'dlg' | 'inv'>
     const issues: Issue[] = []
 
     if (!envelope.version || !envelope.spec) {
@@ -430,7 +846,7 @@ function decodeEnvelopeSafe(bytes: Uint8Array):
 }
 
 function buildTimeline(exp: number | null, nbf?: number): TokenTimeline {
-  const nowSeconds = Math.floor(Date.now() / 1000)
+  const nowSeconds = nowUnixSeconds()
   const expInfo = formatTimestamp(exp)
   const nbfInfo = formatTimestamp(nbf ?? null)
 
