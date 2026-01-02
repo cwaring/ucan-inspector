@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { DebugEntry } from '../../composables/inspector/useDebugLog'
-import type { MockTokenKind } from '../../utils/mockData'
+import type { DebugEntry } from '@/composables/inspector/useDebugLog'
+import type { MockTokenKind } from '@/utils/mockData'
 
 defineProps<{
   open: boolean

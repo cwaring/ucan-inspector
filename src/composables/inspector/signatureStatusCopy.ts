@@ -1,4 +1,4 @@
-import type { SignatureStatus } from '../../utils/ucanAnalysis'
+import type { SignatureStatus } from '@/utils/ucanAnalysis'
 
 /** UI tone for a status chip/label. */
 export type StatusTone = 'info' | 'success' | 'warn' | 'error'

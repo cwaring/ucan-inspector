@@ -1,15 +1,15 @@
 import type { ComputedRef, Ref } from 'vue'
 
-import type { JsonFormat } from '../../utils/format'
-import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '../../utils/ucanAnalysis'
-import type { SignatureStatusMeta, StatusTone } from './signatureStatusCopy'
-import type { DetailTab } from './useUcanInspection'
+import type { SignatureStatusMeta, StatusTone } from '@/composables/inspector/signatureStatusCopy'
+import type { DetailTab } from '@/composables/inspector/useUcanInspection'
+import type { JsonFormat } from '@/utils/format'
+import type { Issue, SignatureStatus, TokenAnalysis, TokenTimeline } from '@/utils/ucanAnalysis'
 
 import { computed, onScopeDispose, ref, watch, watchEffect } from 'vue'
 
-import { relativeTimeFromSeconds, stringifyInline } from '../../utils/format'
-import { nowUnixSeconds } from '../../utils/time'
-import { buildTokenExportModel, stringifyExportValue } from '../../utils/ucanAnalysis'
+import { relativeTimeFromSeconds, stringifyInline } from '@/utils/format'
+import { nowUnixSeconds } from '@/utils/time'
+import { buildTokenExportModel, stringifyExportValue } from '@/utils/ucanAnalysis'
 
 export interface StatusChip {
   label: string

@@ -1,11 +1,11 @@
 import type { ComputedRef, Ref } from 'vue'
 
-import type { JsonFormat } from '../../utils/format'
-import type { AnalysisReport } from '../../utils/ucanAnalysis'
-import type { UseDebugLogReturn } from './useDebugLog'
+import type { UseDebugLogReturn } from '@/composables/inspector/useDebugLog'
+import type { JsonFormat } from '@/utils/format'
+import type { AnalysisReport } from '@/utils/ucanAnalysis'
 
 import { computed } from 'vue'
-import { stringifyReportWithFormat } from '../../utils/ucanAnalysis'
+import { stringifyReportWithFormat } from '@/utils/ucanAnalysis'
 
 export interface UseReportExportReturn {
   /** Whether export actions should be enabled. */

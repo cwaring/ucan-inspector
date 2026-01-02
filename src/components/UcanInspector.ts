@@ -1,7 +1,7 @@
 import { defineCustomElement } from 'vue'
 
-import css from '../.generated/css'
-import Component from './UcanInspector.vue'
+import css from '@/.generated/css'
+import Component from '@/components/UcanInspector.vue'
 
 /**
  * Custom element definition for the inspector.

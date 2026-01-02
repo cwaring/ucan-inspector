@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TokenTimeline } from '../../utils/ucanAnalysis'
+import type { TokenTimeline } from '@/utils/ucanAnalysis'
 
 defineProps<{
   summaryCards: Array<{ label: string, value: string, helper: string }>

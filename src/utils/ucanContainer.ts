@@ -1,9 +1,9 @@
-import type { Base64Variant } from './base64'
+import type { Base64Variant } from '@/utils/base64'
 
 import { decode as decodeCbor } from 'cborg'
 import { ungzip } from 'pako'
 
-import { decodeBase64, encodeBase64 } from './base64'
+import { decodeBase64, encodeBase64 } from '@/utils/base64'
 
 /** Supported payload encodings for UCAN container bytes. */
 export type ContainerEncoding = 'raw' | 'base64' | 'base64url'

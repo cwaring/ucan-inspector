@@ -10,8 +10,8 @@ import { verifier as rsaVerifier } from 'iso-signatures/verifiers/rsa.js'
 import { Delegation } from 'iso-ucan/delegation'
 import { Invocation } from 'iso-ucan/invocation'
 
-import { encodeBase64 } from './base64'
-import { nowUnixSeconds } from './time'
+import { encodeBase64 } from '@/utils/base64'
+import { nowUnixSeconds } from '@/utils/time'
 
 function compareBytes(left: Uint8Array, right: Uint8Array): number {
   const minLength = Math.min(left.length, right.length)

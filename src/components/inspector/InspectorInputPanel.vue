@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import type { JsonFormat } from '../../utils/format'
-import type { Issue } from '../../utils/ucanAnalysis'
-import type { ContainerParseResult } from '../../utils/ucanContainer'
+import type { JsonFormat } from '@/utils/format'
+import type { Issue } from '@/utils/ucanAnalysis'
+import type { ContainerParseResult } from '@/utils/ucanContainer'
 
 defineProps<{
   modelValue: string

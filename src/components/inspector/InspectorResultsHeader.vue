@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { TokenAnalysis } from '../../utils/ucanAnalysis'
+import type { TokenAnalysis } from '@/utils/ucanAnalysis'
 
 type StatusTone = 'info' | 'success' | 'warn' | 'error'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DelegationLink } from './types'
+import type { DelegationLink } from '@/components/inspector/types'
 
 defineProps<{
   delegationLinks: DelegationLink[]

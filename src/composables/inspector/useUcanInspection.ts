@@ -1,13 +1,13 @@
 import type { Ref } from 'vue'
 
-import type { AnalysisReport, Issue, SignatureStatus, TokenAnalysis } from '../../utils/ucanAnalysis'
-import type { ContainerParseResult } from '../../utils/ucanContainer'
+import type { AnalysisReport, Issue, SignatureStatus, TokenAnalysis } from '@/utils/ucanAnalysis'
+import type { ContainerParseResult } from '@/utils/ucanContainer'
 
 import { ref } from 'vue'
 
-import { decodeBase64 } from '../../utils/base64'
-import { analyseBytes, createReport } from '../../utils/ucanAnalysis'
-import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '../../utils/ucanContainer'
+import { decodeBase64 } from '@/utils/base64'
+import { analyseBytes, createReport } from '@/utils/ucanAnalysis'
+import { ContainerParseError, looksLikeContainerHeader, parseUcanContainerText } from '@/utils/ucanContainer'
 
 /** Current state of the parsing/analysis pipeline. */
 export type ParseState = 'idle' | 'parsing' | 'ready' | 'error'

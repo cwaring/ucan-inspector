@@ -1,7 +1,7 @@
 import { encode as encodeDagJson } from '@ipld/dag-json'
 import { formatDistanceStrict, fromUnixTime } from 'date-fns'
 
-import { encodeBase64 } from './base64'
+import { encodeBase64 } from '@/utils/base64'
 
 /** Output format for JSON-like inspector views. */
 export type JsonFormat = 'json' | 'dag-json'
