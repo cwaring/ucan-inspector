@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { computed, effectScope, ref } from 'vue'
 
-import { useSelectedTokenViewModel } from '../../src/composables/inspector/useSelectedTokenViewModel'
+import { useSelectedTokenViewModel } from '@/composables/inspector/useSelectedTokenViewModel'
 
 describe('useSelectedTokenViewModel timeline updates', () => {
   it('updates timelineProgress as time advances', () => {

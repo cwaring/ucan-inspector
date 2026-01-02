@@ -2,9 +2,9 @@ import { encode as encodeEnvelope, getSignaturePayload } from 'iso-ucan/envelope
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBase64, encodeBase64 } from '../../src/utils/base64'
-import { getMockTokens } from '../../src/utils/mockData'
-import { analyseBytes, buildTokenExportModel, createReport, stringifyExportValue, stringifyReport, stringifyReportWithFormat } from '../../src/utils/ucanAnalysis'
+import { decodeBase64, encodeBase64 } from '@/utils/base64'
+import { getMockTokens } from '@/utils/mockData'
+import { analyseBytes, buildTokenExportModel, createReport, stringifyExportValue, stringifyReport, stringifyReportWithFormat } from '@/utils/ucanAnalysis'
 import { createSampleDelegation } from './utils'
 
 describe('ucan analysis', () => {

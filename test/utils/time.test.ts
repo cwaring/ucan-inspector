@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { nowUnixSeconds } from '../../src/utils/time'
+import { nowUnixSeconds } from '@/utils/time'
 
 describe('time utils', () => {
   it('returns unix seconds based on Date.now (mock-friendly)', () => {

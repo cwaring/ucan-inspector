@@ -1,7 +1,7 @@
 import { EdDSASigner } from 'iso-signatures/signers/eddsa.js'
 import { Delegation } from 'iso-ucan/delegation'
 
-import { nowUnixSeconds } from '../../src/utils/time'
+import { nowUnixSeconds } from '@/utils/time'
 
 export interface SampleDelegation {
   delegation: Delegation

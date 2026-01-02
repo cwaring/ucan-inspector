@@ -1,4 +1,4 @@
-import { defineUcanInspector } from '../../src'
+import { defineUcanInspector } from '@/index'
 
 import './override-style.css'
 
