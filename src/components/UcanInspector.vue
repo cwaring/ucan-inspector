@@ -24,7 +24,7 @@ import { useUcanInspection } from '@/composables/inspector/useUcanInspection'
 import { useUcanUrlBootstrap } from '@/composables/inspector/useUcanUrlBootstrap'
 import { useUcanUrlSync } from '@/composables/inspector/useUcanUrlSync'
 
-import { getMockTokens } from '@/utils/mockData'
+import { getMockTokens } from '@/mock'
 import { getInspectorVersion } from '@/utils/version'
 
 interface InspectorProps {
