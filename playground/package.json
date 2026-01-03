@@ -8,6 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
+  "dependencies": {
+    "vue": "catalog:prod"
+  },
   "devDependencies": {
     "typescript": "catalog:dev",
     "vite": "catalog:dev"

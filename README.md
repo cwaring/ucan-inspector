@@ -23,8 +23,10 @@ A Vue 3 custom element for inspecting UCAN tokens (delegations and invocations) 
 ## Quick start
 
 ```bash
-pnpm add @ucan-wg/inspector
+pnpm add @ucan-wg/inspector vue
 ```
+
+This package targets bundler-based apps and uses Vue 3 as a peer dependency.
 
 Register the custom element once during application bootstrap:
 

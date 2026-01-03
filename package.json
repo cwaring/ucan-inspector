@@ -30,6 +30,9 @@
     "typecheck": "tsc --noEmit",
     "prepare": "simple-git-hooks"
   },
+  "peerDependencies": {
+    "vue": "catalog:prod"
+  },
   "dependencies": {
     "@ipld/dag-json": "catalog:prod",
     "cborg": "catalog:prod",
@@ -39,8 +42,7 @@
     "iso-signatures": "catalog:prod",
     "iso-ucan": "catalog:prod",
     "multiformats": "catalog:prod",
-    "pako": "catalog:prod",
-    "vue": "catalog:prod"
+    "pako": "catalog:prod"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:dev",
@@ -67,6 +69,7 @@
     "vite": "catalog:dev",
     "vitest": "catalog:testing",
     "vitest-package-exports": "catalog:testing",
+    "vue": "catalog:prod",
     "yaml": "catalog:testing"
   },
   "simple-git-hooks": {
