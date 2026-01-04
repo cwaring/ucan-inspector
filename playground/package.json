@@ -1,10 +1,10 @@
 {
   "name": "ucan-inspector-playground",
   "type": "module",
-  "version": "0.0.0",
   "private": true,
   "scripts": {
     "dev": "vite",
+    "analyze": "tsc && vite build --mode analyze",
     "build": "tsc && vite build",
     "preview": "vite preview"
   },
@@ -12,6 +12,7 @@
     "vue": "catalog:prod"
   },
   "devDependencies": {
+    "rollup-plugin-visualizer": "catalog:dev",
     "typescript": "catalog:dev",
     "vite": "catalog:dev"
   }
