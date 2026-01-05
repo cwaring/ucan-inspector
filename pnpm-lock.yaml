@@ -49,8 +49,8 @@ catalogs:
       specifier: 0.2.15
       version: 0.2.15
     tsdown:
-      specifier: ^0.19.0-beta.2
-      version: 0.19.0-beta.2
+      specifier: ^0.19.0-beta.3
+      version: 0.19.0-beta.3
     tsx:
       specifier: ^4.21.0
       version: 4.21.0
@@ -206,7 +206,7 @@ importers:
         version: 0.2.15
       tsdown:
         specifier: catalog:dev
-        version: 0.19.0-beta.2(synckit@0.11.11)(typescript@5.9.3)
+        version: 0.19.0-beta.3(synckit@0.11.11)(typescript@5.9.3)
       tsx:
         specifier: catalog:dev
         version: 4.21.0
@@ -2808,8 +2808,8 @@ packages:
     peerDependencies:
       typescript: '>=4.0.0'
 
-  tsdown@0.19.0-beta.2:
-    resolution: {integrity: sha512-hIn4nKz9YY5rUEiD/JPFIX0SI733ktgEESyn9o/iS1fnfryhxe7/FfJ0KuM2enxOKHqpAdHU/DiC0DPzBC5CVg==}
+  tsdown@0.19.0-beta.3:
+    resolution: {integrity: sha512-Ud75SBmTap0kDf9hs31yBBlU0iAV17gtZgTJlW6nG/e4J6wXPXwQtUXt/Fck4XSmHXXgSuYRwGrjF6AxTLwk+Q==}
     engines: {node: '>=20.19.0'}
     hasBin: true
     peerDependencies:
@@ -5822,7 +5822,7 @@ snapshots:
       picomatch: 4.0.3
       typescript: 5.9.3
 
-  tsdown@0.19.0-beta.2(synckit@0.11.11)(typescript@5.9.3):
+  tsdown@0.19.0-beta.3(synckit@0.11.11)(typescript@5.9.3):
     dependencies:
       ansis: 4.2.0
       cac: 6.7.14
