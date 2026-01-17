@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import c from 'ansis'
 import { resolveModulePath } from 'exsolve'
 import { transform } from 'lightningcss'
@@ -81,6 +81,6 @@ export async function buildCSS() {
 }
 
 // Run when executed directly (not imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   await buildCSS()
 }
