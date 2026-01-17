@@ -4,12 +4,12 @@
   "version": "0.1.2",
   "packageManager": "pnpm@10.28.0",
   "description": "UCAN Inspector, a webcomponent for inspecting UCAN tokens and containers",
-  "author": "@cwaring",
+  "author": "Chris Waring (https://github.com/cwaring)",
   "license": "MIT",
   "homepage": "https://github.com/cwaring/ucan-inspector#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cwaring/ucan-inspector"
+    "url": "git+https://github.com/cwaring/ucan-inspector.git"
   },
   "bugs": {
     "url": "https://github.com/cwaring/ucan-inspector/issues"
