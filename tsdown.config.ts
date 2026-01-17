@@ -10,7 +10,7 @@ export default defineConfig({
   entry: [
     'src/index.ts',
   ],
-  fixedExtension: true,
+  exports: true,
   alias: {
     '@': fileURLToPath(new URL('./src', import.meta.url)),
   },
