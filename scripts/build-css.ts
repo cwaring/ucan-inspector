@@ -82,5 +82,5 @@ export async function buildCSS() {
 
 // Run when executed directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  buildCSS()
+  await buildCSS()
 }
