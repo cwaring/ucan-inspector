@@ -14,7 +14,7 @@ import config from '../uno.config'
 const SRC_DIR = fileURLToPath(new URL('../src', import.meta.url))
 const GLOBS = ['components/**/*.vue']
 const USER_STYLE = join(SRC_DIR, 'style.css')
-const GENERATED_CSS = join(SRC_DIR, '.generated/css.ts')
+const GENERATED_CSS = join(SRC_DIR, 'generated/css.ts')
 const MINIFY = true
 
 export async function buildCSS() {
