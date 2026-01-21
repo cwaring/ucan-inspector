@@ -1,4 +1,4 @@
-[![UCAN Inspector](https://s6.imgcdn.dev/YliMci.jpg)](https://s6.imgcdn.dev/YliMci.jpg)
+[![UCAN Inspector](https://github.com/user-attachments/assets/37e0f892-8414-40eb-af6c-31b6591c2c9b)](https://inspector.ucan.xyz)
 
 # UCAN Inspector (web component)
 
