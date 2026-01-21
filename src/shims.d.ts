@@ -5,7 +5,7 @@ declare module '*.vue' {
   export default component
 }
 
-declare module '@/generated/css' {
+declare module '@/.generated/css' {
   const css: string
   export default css
 }
