@@ -188,26 +188,6 @@ function toggleDebugMode(): void {
 
 <template>
   <div class="space-y-8 text-slate-100">
-    <header class="hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 p-8 shadow-2xl ring-1 ring-white/10">
-      <p class="text-sm uppercase tracking-[0.35em] text-slate-400">
-        UCAN Inspector
-      </p>
-      <h1 class="mt-3 text-3xl font-semibold text-white lg:text-4xl">
-        Inspect, validate, and understand your UCAN tokens
-      </h1>
-      <p class="mt-4 max-w-3xl text-base text-slate-300">
-        Paste a UCAN token or container to decode headers, payloads, capability policies, and delegation chains. Visualize freshness windows, export structured reports, and share insight with your team.
-      </p>
-      <div class="mt-6 flex flex-wrap gap-3">
-        <a href="https://ucan-staging.pages.dev/specification/" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/5 px-4 py-2 text-sm font-medium text-indigo-200 transition hover:border-white/40 hover:bg-white/10">
-          Read the spec
-        </a>
-        <a href="https://ucan-staging.pages.dev/libraries/" target="_blank" rel="noreferrer" class="inline-flex items-center gap-2 rounded-full border border-transparent bg-indigo-500/90 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-400">
-          Explore libraries
-        </a>
-      </div>
-    </header>
-
     <div class="grid gap-6 lg:grid-cols-[minmax(0,360px)_1fr]">
       <InspectorInputPanel
         v-model="inputValue"
