@@ -1,6 +1,13 @@
 /* Extra Styles to be bundled into the Inspector */
 :root, :host {
   --un-bg-opacity: 100%;
+  --scrollbar-thumb: rgba(100,116,139,0.5); 
+}
+
+textarea,
+.scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb, rgba(100,116,139,0.5)) transparent;
 }
 
 .fade-enter-active,
