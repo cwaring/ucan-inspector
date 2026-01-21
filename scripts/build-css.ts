@@ -18,7 +18,7 @@ const GENERATED_CSS = join(SRC_DIR, 'generated/css.ts')
 const MINIFY = true
 
 export async function buildCSS() {
-  const generater = await createGenerator(config)
+  const generator = await createGenerator(config)
 
   const files = await glob(GLOBS, {
     cwd: SRC_DIR,
@@ -29,19 +29,19 @@ export async function buildCSS() {
   const userCSS = new MagicString(await fs.readFile(USER_STYLE, 'utf-8').catch(() => ''))
 
   // Transform user style with UnoCSS transformers
-  for (const transformer of generater.config.transformers || []) {
-    await transformer.transform(userCSS, USER_STYLE, { uno: generater } as any)
+  for (const transformer of generator.config.transformers || []) {
+    await transformer.transform(userCSS, USER_STYLE, { uno: generator } as any)
   }
 
   // Extra tokens from source files
   const tokens = new Set<string>()
   for (const file of files) {
     const content = await fs.readFile(file, 'utf-8')
-    await generater.applyExtractors(content, file, tokens)
+    await generator.applyExtractors(content, file, tokens)
   }
 
   // Generate CSS with UnoCSS
-  const unoResult = await generater.generate(tokens)
+  const unoResult = await generator.generate(tokens)
 
   // Compose the CSS
   const resetCSS = await fs.readFile(resolveModulePath('@unocss/reset/tailwind.css'), 'utf-8')
