@@ -1,7 +1,7 @@
 {
   "name": "@ucan-wg/inspector",
   "type": "module",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "packageManager": "pnpm@10.28.1",
   "description": "UCAN Inspector, a webcomponent for inspecting UCAN tokens and containers",
   "author": "Chris Waring (https://github.com/cwaring)",
