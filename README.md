@@ -140,4 +140,4 @@ This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/uti
 
 ## License
 
-[MIT](./LICENSE.md) © 2025 [Chris Waring](https://github.com/cwaring)
+Dual-licensed under [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE) (your choice). Any contributions follow the same terms.
