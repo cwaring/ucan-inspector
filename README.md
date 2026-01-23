@@ -140,4 +140,4 @@ This repo includes a pnpm patch that adds an `iso-ucan` export for `iso-ucan/uti
 
 ## License
 
-Dual-licensed under [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE) (your choice). Any contributions follow the same terms.
+Dual-licensed under [MIT](./LICENSE-MIT) or [Apache-2.0](./LICENSE-APACHE) (your choice). Contributions follow the same terms.
