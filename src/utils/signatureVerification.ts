@@ -28,9 +28,15 @@ const signatureResolver = new SignatureResolver(
 )
 
 const didResolver = didDefaultResolver
+const unsupportedReasonPatterns = [
+  /unsupported/i,
+  /No verification method/i,
+  /No DID Document/i,
+  /fetch is not defined/i,
+]
 
 function isUnsupportedReason(message: string): boolean {
-  return /unsupported/i.test(message) || /No verification method/i.test(message) || /No DID Document/i.test(message) || /fetch is not defined/i.test(message)
+  return unsupportedReasonPatterns.some(pattern => pattern.test(message))
 }
 
 /**

@@ -82,6 +82,7 @@ const textHeaderTable: Record<number, { encoding: Exclude<ContainerEncoding, 'ra
   0x4F: { encoding: 'base64', compression: 'gzip', variant: 'standard' }, // O
   0x50: { encoding: 'base64url', compression: 'gzip', variant: 'url' }, // P
 }
+const whitespacePattern = /\s+/g
 
 /**
  * Heuristic check for whether a string begins with a known container header.
@@ -241,7 +242,7 @@ function decodeBase64WithContext(input: string, variant: Base64Variant): Uint8Ar
 }
 
 function normalizeEncodedPayload(input: string, variant: Base64Variant, diagnostics: ContainerDiagnostic[]): string {
-  const value = input.replaceAll(/\s+/g, '')
+  const value = input.replaceAll(whitespacePattern, '')
   if (variant === 'url') {
     if (value.includes('=')) {
       diagnostics.push({
