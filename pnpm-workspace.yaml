@@ -1,14 +1,14 @@
+allowBuilds:
+  esbuild: true
+  simple-git-hooks: true
+
 catalogMode: prefer
-
 cleanupUnusedCatalogs: true
-
 ignoreWorkspaceRootCheck: true
 shellEmulator: true
 
 trustPolicy: no-downgrade
 
-trustPolicyExclude:
-  - ts-api-utils@2.3.0
 packages:
   - playground
   - docs
