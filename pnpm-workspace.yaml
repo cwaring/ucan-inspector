@@ -16,49 +16,45 @@ packages:
   - examples/*
 patchedDependencies:
   iso-ucan: patches/iso-ucan.patch
-
 catalogs:
   dev:
-    '@antfu/eslint-config': ^7.7.3
-    '@antfu/ni': ^30.0.0
-    '@unocss/reset': ^66.6.7
+    '@antfu/eslint-config': ^8.2.0
+    '@antfu/ni': ^30.1.0
+    '@unocss/reset': ^66.6.8
     ansis: ^4.2.0
     bumpp: ^11.0.1
     chokidar: ^5.0.0
-    eslint: ^10.1.0
+    eslint: ^10.3.0
     exsolve: ^1.0.8
     lightningcss: ^1.32.0
     lint-staged: ^16.4.0
     magic-string: ^0.30.21
     rollup-plugin-visualizer: ^7.0.1
     simple-git-hooks: ^2.13.1
-    tinyglobby: 0.2.15
-    tsdown: ^0.21.6
+    tinyglobby: ^0.2.16
+    tsdown: ^0.21.10
     tsx: ^4.21.0
-    typescript: ^5.9.3
-    unocss: ^66.6.7
-    unplugin-vue: ^7.1.1
-    vite: ^8.0.3
+    typescript: ^6.0.3
+    unocss: ^66.6.8
+    unplugin-vue: ^7.2.0
+    vite: ^8.0.10
   prod:
-    '@ipld/dag-json': ^10.2.6
-    cborg: ^4.5.8
+    '@ipld/dag-json': ^10.2.7
+    cborg: ^5.1.1
     date-fns: ^4.1.0
     iso-base: ^4.3.1
     iso-did: ^2.1.1
     iso-signatures: ^0.5.1
-    iso-ucan: ^0.4.2
+    iso-ucan: ^0.5.0
     multiformats: ^13.4.2
     pako: ^2.1.0
-    vue: ^3.5.31
+    vue: ^3.5.33
   testing:
-    vitest: ^4.1.2
+    vitest: ^4.1.5
     vitest-package-exports: ^1.2.0
-    yaml: ^2.8.3
+    yaml: ^2.8.4
   types:
-    '@types/node': ^25.5.0
+    '@types/node': ^25.6.0
     '@types/pako': ^2.0.4
   utils:
-    tinyexec: ^1.0.4
-onlyBuiltDependencies:
-  - esbuild
-  - simple-git-hooks
+    tinyexec: ^1.1.2

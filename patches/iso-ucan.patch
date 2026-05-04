@@ -1,8 +1,8 @@
 diff --git a/package.json b/package.json
-index 0c52591e00f56365fa19b23cde6bd5e8735f7493..2f1bd9c110d22b5da1615a22589e01a61c57e57a 100644
+index 7fb8b4bb223c0fd1579ac0ee1c4fc394452d6fa5..9dbe1b9f80f8c2494dd8ee92c94e86ea8c18dd08 100644
 --- a/package.json
 +++ b/package.json
-@@ -44,6 +44,10 @@
+@@ -40,6 +40,10 @@
        "types": "./dist/src/varsig.d.ts",
        "default": "./src/varsig.js"
      },
@@ -10,6 +10,6 @@ index 0c52591e00f56365fa19b23cde6bd5e8735f7493..2f1bd9c110d22b5da1615a22589e01a6
 +      "types": "./dist/src/utils.d.ts",
 +      "default": "./src/utils.js"
 +    },
-     "./server": {
-       "types": "./dist/src/server.d.ts",
-       "default": "./src/server.js"
+     "./policy": {
+       "types": "./dist/src/policy.d.ts",
+       "default": "./src/policy.js"
