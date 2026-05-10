@@ -27,7 +27,7 @@ catalogs:
     eslint: ^10.3.0
     exsolve: ^1.0.8
     lightningcss: ^1.32.0
-    lint-staged: ^17.0.2
+    lint-staged: ^17.0.4
     magic-string: ^0.30.21
     rollup-plugin-visualizer: ^7.0.1
     simple-git-hooks: ^2.13.1
@@ -54,7 +54,7 @@ catalogs:
     vitest-package-exports: ^1.2.0
     yaml: ^2.8.4
   types:
-    '@types/node': ^25.6.0
+    '@types/node': ^25.6.2
     '@types/pako': ^2.0.4
   utils:
     tinyexec: ^1.1.2
